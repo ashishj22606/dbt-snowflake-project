@@ -57,6 +57,7 @@ using (
 on target.PROCESS_STEP_ID = source.process_step_id
 when matched then update set
     target.UPDATE_TMSTP = current_timestamp(),
+    target.SOURCE_DATA_CNT = coalesce(target.SOURCE_DATA_CNT, 0) + source.destination_row_count,
     target.STEP_EXECUTION_OBJ = object_insert(
         object_insert(
             object_insert(

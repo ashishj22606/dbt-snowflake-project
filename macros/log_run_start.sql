@@ -40,7 +40,7 @@ select
     parse_json('{}') as SOURCE_OBJ,
     parse_json('{}') as DESTINATION_OBJ,
     parse_json('{"invocation_id":"{{ run_id }}","project_name":"{{ project_name }}","target_name":"{{ target.name }}","dbt_version":"{{ dbt_version }}","run_started_at":"{{ run_started_at }}","which":"run","full_refresh":false,"target_database":"{{ target.database }}","target_schema":"{{ target.schema }}","warehouse":"{{ target.warehouse }}","threads":{{ target.threads }}}') as PROCESS_CONFIG_OBJ,
-    parse_json('{}') as SOURCE_DATA_CNT,
+    0 as SOURCE_DATA_CNT,
     parse_json('{}') as DESTINATION_DATA_CNT_OBJ,
     'DBT_JOB_RUN' as EXECUTION_TYPE_NAME,
     CURRENT_TIMESTAMP() as EXTRACT_START_TMSTP,

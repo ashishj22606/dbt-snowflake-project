@@ -88,8 +88,7 @@ using (
                 'full_name', '{{ this.database }}.{{ this.schema }}.{{ this.identifier }}'
             ),
             true
-        ) as new_dest_obj,
-        object_construct() as source_row_counts
+        ) as new_dest_obj
     from {{ log_table }} base
     where base.PROCESS_STEP_ID = '{{ process_step_id }}'
 ) as source
@@ -99,12 +98,6 @@ when matched then update set
     target.EXECUTION_STATUS_NAME = 'RUNNING',
     target.SOURCE_OBJ = source.new_source_obj,
     target.DESTINATION_OBJ = source.new_dest_obj,
-    target.SOURCE_DATA_CNT = object_insert(
-        coalesce(target.SOURCE_DATA_CNT, parse_json('{}')),
-        '{{ model_name }}',
-        source.source_row_counts,
-        true
-    ),
     target.STEP_EXECUTION_OBJ = object_insert(
         object_insert(
             object_insert(
