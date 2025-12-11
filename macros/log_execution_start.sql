@@ -2,8 +2,8 @@
 
 {#- 
     This macro UPDATES the single job record when a model STARTS executing.
-    Appends model to the models array with RUNNING status for real-time tracking.
-    Uses MERGE with CTE to safely build the new models array.
+    Appends model to array with config details and adds timeline event.
+    Captures query ID for tracking in Snowflake.
 -#}
 
 {% set log_table = 'DEV_PROVIDERPDM.PROVIDERPDM_CORE_TARGET.PROCESS_EXECUTION_LOG' %}
@@ -21,16 +21,31 @@ using (
                 'model_name', '{{ model_name }}',
                 'database', '{{ this.database }}',
                 'schema', '{{ this.schema }}',
+                'alias', '{{ this.identifier }}',
+                'materialization', '{{ config.get("materialized", "view") }}',
                 'status', 'RUNNING',
                 'start_time', to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3'),
                 'end_time', null,
-                'duration_seconds', null
+                'duration_seconds', null,
+                'query_id_start', LAST_QUERY_ID(),
+                'query_id_end', null,
+                'rows_affected', null
             )
         ) as new_models_array,
+        array_append(
+            coalesce(STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]')),
+            object_construct(
+                'timestamp', to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3'),
+                'level', 'Info',
+                'title', 'Model Started: {{ model_name }}',
+                'content', object_construct('model', '{{ model_name }}', 'materialization', '{{ config.get("materialized", "view") }}')
+            )
+        ) as new_timeline,
         object_construct(
             'total_models', coalesce(DESTINATION_DATA_CNT_OBJ:total_models::int, 0) + 1,
             'success', coalesce(DESTINATION_DATA_CNT_OBJ:success::int, 0),
             'failed', coalesce(DESTINATION_DATA_CNT_OBJ:failed::int, 0),
+            'skipped', coalesce(DESTINATION_DATA_CNT_OBJ:skipped::int, 0),
             'running', coalesce(DESTINATION_DATA_CNT_OBJ:running::int, 0) + 1
         ) as new_counts
     from {{ log_table }}
@@ -42,9 +57,14 @@ when matched then update set
     target.EXECUTION_STATUS_NAME = 'RUNNING',
     target.STEP_EXECUTION_OBJ = object_insert(
         object_insert(
-            target.STEP_EXECUTION_OBJ,
-            'models',
-            source.new_models_array,
+            object_insert(
+                target.STEP_EXECUTION_OBJ,
+                'models',
+                source.new_models_array,
+                true
+            ),
+            'execution_timeline',
+            source.new_timeline,
             true
         ),
         'current_step',
