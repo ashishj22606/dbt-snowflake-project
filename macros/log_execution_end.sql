@@ -30,15 +30,7 @@ using (
                         'duration_seconds', timestampdiff(second, model_data.value:start_time::timestamp_ntz, current_timestamp()),
                         'query_id_start', model_data.value:query_id_start,
                         'query_id_end', LAST_QUERY_ID(),
-                        'rows_affected', (
-                            select object_construct(
-                                'rows_inserted', rs.value:"number of rows inserted"::int,
-                                'rows_updated', rs.value:"number of rows updated"::int,
-                                'rows_deleted', rs.value:"number of rows deleted"::int
-                            )
-                            from table(result_scan(LAST_QUERY_ID())) rs
-                            limit 1
-                        )
+                        'rows_affected', null
                     )
                 else model_data.value
             end
