@@ -79,16 +79,27 @@ using (
                 'duration_seconds', null,
                 'query_id_start', LAST_QUERY_ID(),
                 'query_id_end', null,
-                'rows_affected', null
+                'rows_affected', null,
+                'lineage_steps', parse_json('[]')
             )
         ) as new_models_array,
         array_append(
             coalesce(STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]')),
             object_construct(
+                'step_number', array_size(coalesce(STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]'))) + 1,
                 'timestamp', to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3'),
                 'level', 'Info',
+                'step_type', 'MODEL_START',
                 'title', 'Model Started: {{ model_name }}',
-                'content', object_construct('model', '{{ model_name }}', 'materialization', '{{ config.get("materialized", "view") }}')
+                'query_id', LAST_QUERY_ID(),
+                'content', object_construct(
+                    'model', '{{ model_name }}', 
+                    'materialization', '{{ materialization }}',
+                    'execution_type', '{{ execution_type }}',
+                    'database', '{{ this.database }}',
+                    'schema', '{{ this.schema }}',
+                    'table', '{{ this.identifier }}'
+                )
             )
         ) as new_timeline,
         object_insert(

@@ -39,13 +39,21 @@ using (
         array_append(
             coalesce(base.STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]')),
             object_construct(
+                'step_number', array_size(coalesce(base.STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]'))) + 1,
                 'timestamp', to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3'),
                 'level', 'Info',
+                'step_type', 'MODEL_COMPLETE',
                 'title', 'Model Completed: {{ model_name }}',
+                'query_id', LAST_QUERY_ID(),
+                'query_result', object_construct(
+                    'rows_in_destination', source.destination_row_count,
+                    'execution_status', 'SUCCESS'
+                ),
                 'content', object_construct(
                     'model', '{{ model_name }}',
                     'status', 'SUCCESS',
-                    'query_id', LAST_QUERY_ID()
+                    'rows_processed', source.destination_row_count,
+                    'destination_table', '{{ this.database }}.{{ this.schema }}.{{ this.identifier }}'
                 )
             )
         ) as new_timeline
