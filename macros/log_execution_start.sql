@@ -83,7 +83,19 @@ using (
             '{{ model_name }}',
             parse_json('{{ sources_json }}'),
             true
-        ) as new_source_obj
+        ) as new_source_obj,
+        object_insert(
+            coalesce(base.DESTINATION_OBJ, parse_json('{}')),
+            '{{ model_name }}',
+            object_construct(
+                'database', '{{ this.database }}',
+                'schema', '{{ this.schema }}',
+                'table', '{{ this.identifier }}',
+                'materialization', '{{ config.get("materialized", "view") }}',
+                'full_name', '{{ this.database }}.{{ this.schema }}.{{ this.identifier }}'
+            ),
+            true
+        ) as new_dest_obj
     from {{ log_table }} base
     where base.PROCESS_STEP_ID = '{{ process_step_id }}'
 ) as source
@@ -92,6 +104,7 @@ when matched then update set
     target.UPDATE_TMSTP = current_timestamp(),
     target.EXECUTION_STATUS_NAME = 'RUNNING',
     target.SOURCE_OBJ = source.new_source_obj,
+    target.DESTINATION_OBJ = source.new_dest_obj,
     target.STEP_EXECUTION_OBJ = object_insert(
         object_insert(
             object_insert(
