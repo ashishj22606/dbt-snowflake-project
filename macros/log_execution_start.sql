@@ -2,7 +2,8 @@
 
 {#- 
     This macro UPDATES the single job record when a model STARTS executing.
-    Updates current_step to show which model is running.
+    Appends model to the models array with RUNNING status for real-time tracking.
+    Uses MERGE with CTE to safely build the new models array.
 -#}
 
 {% set log_table = 'DEV_PROVIDERPDM.PROVIDERPDM_CORE_TARGET.PROCESS_EXECUTION_LOG' %}
@@ -10,12 +11,47 @@
 {% set run_id = invocation_id %}
 {% set process_step_id = 'JOB_' ~ run_id %}
 
-update {{ log_table }}
-set
-    UPDATE_TMSTP = CURRENT_TIMESTAMP(),
-    EXECUTION_STATUS_NAME = 'RUNNING',
-    STEP_EXECUTION_OBJ = object_insert(STEP_EXECUTION_OBJ, 'current_step', 'RUNNING: {{ model_name }}', true)
-where PROCESS_STEP_ID = '{{ process_step_id }}'
+merge into {{ log_table }} as target
+using (
+    select 
+        '{{ process_step_id }}' as process_step_id,
+        array_append(
+            coalesce(STEP_EXECUTION_OBJ:models, parse_json('[]')),
+            object_construct(
+                'model_name', '{{ model_name }}',
+                'database', '{{ this.database }}',
+                'schema', '{{ this.schema }}',
+                'status', 'RUNNING',
+                'start_time', to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3'),
+                'end_time', null,
+                'duration_seconds', null
+            )
+        ) as new_models_array,
+        object_construct(
+            'total_models', coalesce(DESTINATION_DATA_CNT_OBJ:total_models::int, 0) + 1,
+            'success', coalesce(DESTINATION_DATA_CNT_OBJ:success::int, 0),
+            'failed', coalesce(DESTINATION_DATA_CNT_OBJ:failed::int, 0),
+            'running', coalesce(DESTINATION_DATA_CNT_OBJ:running::int, 0) + 1
+        ) as new_counts
+    from {{ log_table }}
+    where PROCESS_STEP_ID = '{{ process_step_id }}'
+) as source
+on target.PROCESS_STEP_ID = source.process_step_id
+when matched then update set
+    target.UPDATE_TMSTP = current_timestamp(),
+    target.EXECUTION_STATUS_NAME = 'RUNNING',
+    target.STEP_EXECUTION_OBJ = object_insert(
+        object_insert(
+            target.STEP_EXECUTION_OBJ,
+            'models',
+            source.new_models_array,
+            true
+        ),
+        'current_step',
+        'RUNNING: {{ model_name }}',
+        true
+    ),
+    target.DESTINATION_DATA_CNT_OBJ = source.new_counts
 
 {%- endmacro -%}
 
