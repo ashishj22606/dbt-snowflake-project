@@ -73,15 +73,71 @@
 {% endfor %}
 {% set error_json = '[' ~ error_json_parts | join(',') ~ ']' %}
 
-update {{ log_table }}
-set
-    EXECUTION_STATUS_NAME = '{{ job_status }}',
-    EXECUTION_COMPLETED_IND = 'Y',
-    EXECUTION_END_TMSTP = CURRENT_TIMESTAMP(),
-    EXTRACT_END_TMSTP = CURRENT_TIMESTAMP(),
-    UPDATE_TMSTP = CURRENT_TIMESTAMP(),
-    STEP_EXECUTION_OBJ = parse_json('{"current_step":"JOB_COMPLETED","job_status":"{{ job_status }}","summary":{"total":{{ ns.total_count }},"success":{{ ns.success_count }},"error":{{ ns.error_count }},"skipped":{{ ns.skip_count }}},"models":{{ models_json }}}'),
-    ERROR_MESSAGE_OBJ = {% if ns.error_count > 0 %}parse_json('{"error_count":{{ ns.error_count }},"errors":{{ error_json }}}'){% else %}parse_json('null'){% endif %}
-where PROCESS_STEP_ID = '{{ process_step_id }}'
+merge into {{ log_table }} as target
+using (
+    select 
+        '{{ process_step_id }}' as process_step_id,
+        parse_json('{{ models_json }}') as final_models_summary,
+        object_insert(
+            object_insert(
+                object_insert(
+                    coalesce(base.STEP_EXECUTION_OBJ, parse_json('{}')),
+                    'current_step',
+                    'JOB_COMPLETED',
+                    true
+                ),
+                'job_status',
+                '{{ job_status }}',
+                true
+            ),
+            'summary',
+            object_construct(
+                'total', {{ ns.total_count }},
+                'success', {{ ns.success_count }},
+                'error', {{ ns.error_count }},
+                'skipped', {{ ns.skip_count }}
+            ),
+            true
+        ) as updated_step_obj,
+        array_append(
+            coalesce(base.STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]')),
+            object_construct(
+                'step_number', array_size(coalesce(base.STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]'))) + 1,
+                'timestamp', to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3'),
+                'level', '{% if ns.error_count > 0 %}Error{% else %}Info{% endif %}',
+                'step_type', 'JOB_COMPLETE',
+                'title', 'Job Completed: {{ job_status }}',
+                'query_id', null,
+                'query_result', object_construct(
+                    'total_models', {{ ns.total_count }},
+                    'successful_models', {{ ns.success_count }},
+                    'failed_models', {{ ns.error_count }},
+                    'skipped_models', {{ ns.skip_count }},
+                    'final_status', '{{ job_status }}'
+                ),
+                'content', object_construct(
+                    'job_status', '{{ job_status }}',
+                    'models_summary', base.final_models_summary
+                )
+            )
+        ) as final_timeline
+    from {{ log_table }} base
+    cross join (select parse_json('{{ models_json }}') as final_models_summary) models
+    where base.PROCESS_STEP_ID = '{{ process_step_id }}'
+) as source
+on target.PROCESS_STEP_ID = source.process_step_id
+when matched then update set
+    target.EXECUTION_STATUS_NAME = '{{ job_status }}',
+    target.EXECUTION_COMPLETED_IND = 'Y',
+    target.EXECUTION_END_TMSTP = CURRENT_TIMESTAMP(),
+    target.EXTRACT_END_TMSTP = CURRENT_TIMESTAMP(),
+    target.UPDATE_TMSTP = CURRENT_TIMESTAMP(),
+    target.STEP_EXECUTION_OBJ = object_insert(
+        source.updated_step_obj,
+        'execution_timeline',
+        source.final_timeline,
+        true
+    ),
+    target.ERROR_MESSAGE_OBJ = {% if ns.error_count > 0 %}parse_json('{"error_count":{{ ns.error_count }},"errors":{{ error_json }}}'){% else %}parse_json('null'){% endif %}
 
 {%- endmacro -%}
