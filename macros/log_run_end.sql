@@ -1,9 +1,8 @@
 {%- macro log_run_end() -%}
 
 {#- 
-    This macro updates the job-level record in PROCESS_EXECUTION_LOG when a dbt run ends.
-    It uses Snowflake's CURRENT_TIMESTAMP() to get server time.
-    The PROCESS_STEP_ID is the unique identifier for the entire job run (JOB_ + invocation_id).
+    This macro updates the SINGLE record in PROCESS_EXECUTION_LOG when a dbt run ends.
+    It updates the final status and summary counts.
 -#}
 
 {% set log_table = 'DEV_PROVIDERPDM.PROVIDERPDM_CORE_TARGET.PROCESS_EXECUTION_LOG' %}
@@ -17,8 +16,12 @@ set
     EXECUTION_END_TMSTP = CURRENT_TIMESTAMP(),
     EXTRACT_END_TMSTP = CURRENT_TIMESTAMP(),
     UPDATE_TMSTP = CURRENT_TIMESTAMP(),
-    STEP_EXECUTION_OBJ = parse_json('{"step": "JOB_END", "type": "FULL_RUN", "status": "SUCCESS"}'),
-    ERROR_MESSAGE_OBJ = null
+    STEP_EXECUTION_OBJ = object_insert(
+        STEP_EXECUTION_OBJ,
+        'current_step',
+        'JOB_COMPLETED',
+        true
+    )
 where PROCESS_STEP_ID = '{{ process_step_id }}'
 
 {%- endmacro -%}
