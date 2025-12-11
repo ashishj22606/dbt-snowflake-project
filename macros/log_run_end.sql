@@ -73,24 +73,43 @@
 {% endfor %}
 {% set error_json = '[' ~ error_json_parts | join(',') ~ ']' %}
 
-update {{ log_table }}
-set
-    EXECUTION_STATUS_NAME = '{{ job_status }}',
-    EXECUTION_COMPLETED_IND = 'Y',
-    EXECUTION_END_TMSTP = CURRENT_TIMESTAMP(),
-    EXTRACT_END_TMSTP = CURRENT_TIMESTAMP(),
-    UPDATE_TMSTP = CURRENT_TIMESTAMP(),
-    DESTINATION_DATA_CNT_OBJ = parse_json('{"total_models":{{ ns.total_count }},"success":{{ ns.success_count }},"failed":{{ ns.error_count }},"skipped":{{ ns.skip_count }},"running":0}'),
-    STEP_EXECUTION_OBJ = object_insert(
-        parse_json('{"current_step":"JOB_COMPLETED","job_status":"{{ job_status }}","summary":{"total":{{ ns.total_count }},"success":{{ ns.success_count }},"error":{{ ns.error_count }},"skipped":{{ ns.skip_count }}},"models":{{ models_json }}}'),
-        'execution_timeline',
+merge into {{ log_table }} as target
+using (
+    select
+        '{{ process_step_id }}' as process_step_id,
+        parse_json('{"current_step":"JOB_COMPLETED","job_status":"{{ job_status }}","summary":{"total":{{ ns.total_count }},"success":{{ ns.success_count }},"error":{{ ns.error_count }},"skipped":{{ ns.skip_count }}},"models":{{ models_json }}}') as job_data,
         array_append(
-            coalesce(STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]')),
-            parse_json('{"timestamp":"' || to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3') || '","level":"' || CASE WHEN {{ ns.error_count }} > 0 THEN 'Error' ELSE 'Info' END || '","title":"Job Completed","content":{"status":"{{ job_status }}","total_models":{{ ns.total_count }},"success":{{ ns.success_count }},"failed":{{ ns.error_count }},"duration_seconds":' || timestampdiff(second, EXECUTION_START_TMSTP, current_timestamp()) || '}}')
-        ),
+            coalesce(base.STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]')),
+            object_construct(
+                'timestamp', to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3'),
+                'level', {% if ns.error_count > 0 %}'Error'{% else %}'Info'{% endif %},
+                'title', 'Job Completed',
+                'content', object_construct(
+                    'status', '{{ job_status }}',
+                    'total_models', {{ ns.total_count }},
+                    'success', {{ ns.success_count }},
+                    'failed', {{ ns.error_count }},
+                    'duration_seconds', timestampdiff(second, base.EXECUTION_START_TMSTP, current_timestamp())
+                )
+            )
+        ) as final_timeline
+    from {{ log_table }} base
+    where base.PROCESS_STEP_ID = '{{ process_step_id }}'
+) as source
+on target.PROCESS_STEP_ID = source.process_step_id
+when matched then update set
+    target.EXECUTION_STATUS_NAME = '{{ job_status }}',
+    target.EXECUTION_COMPLETED_IND = 'Y',
+    target.EXECUTION_END_TMSTP = CURRENT_TIMESTAMP(),
+    target.EXTRACT_END_TMSTP = CURRENT_TIMESTAMP(),
+    target.UPDATE_TMSTP = CURRENT_TIMESTAMP(),
+    target.DESTINATION_DATA_CNT_OBJ = parse_json('{"total_models":{{ ns.total_count }},"success":{{ ns.success_count }},"failed":{{ ns.error_count }},"skipped":{{ ns.skip_count }},"running":0}'),
+    target.STEP_EXECUTION_OBJ = object_insert(
+        source.job_data,
+        'execution_timeline',
+        source.final_timeline,
         true
     ),
-    ERROR_MESSAGE_OBJ = {% if ns.error_count > 0 %}parse_json('{"error_count":{{ ns.error_count }},"errors":{{ error_json }}}'){% else %}parse_json('null'){% endif %}
-where PROCESS_STEP_ID = '{{ process_step_id }}'
+    target.ERROR_MESSAGE_OBJ = {% if ns.error_count > 0 %}parse_json('{"error_count":{{ ns.error_count }},"errors":{{ error_json }}}'){% else %}parse_json('null'){% endif %}
 
 {%- endmacro -%}

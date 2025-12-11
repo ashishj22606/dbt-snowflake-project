@@ -74,5 +74,3 @@ when matched then update set
     target.DESTINATION_DATA_CNT_OBJ = source.new_counts
 
 {%- endmacro -%}
-
-{%- endmacro -%}
