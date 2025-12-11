@@ -15,6 +15,7 @@ merge into {{ log_table }} as target
 using (
     select 
         '{{ process_step_id }}' as process_step_id,
+        (select count(*) from {{ this }}) as destination_row_count,
         array_agg(
             case 
                 when model_data.value:model_name::string = '{{ model_name }}' then
@@ -47,18 +48,11 @@ using (
                     'query_id', LAST_QUERY_ID()
                 )
             )
-        ) as new_timeline,
-        object_construct(
-            'total_models', coalesce(base.DESTINATION_DATA_CNT_OBJ:total_models::int, 0),
-            'success', coalesce(base.DESTINATION_DATA_CNT_OBJ:success::int, 0) + 1,
-            'failed', coalesce(base.DESTINATION_DATA_CNT_OBJ:failed::int, 0),
-            'skipped', coalesce(base.DESTINATION_DATA_CNT_OBJ:skipped::int, 0),
-            'running', greatest(coalesce(base.DESTINATION_DATA_CNT_OBJ:running::int, 0) - 1, 0)
-        ) as new_counts
+        ) as new_timeline
     from {{ log_table }} base,
          lateral flatten(input => base.STEP_EXECUTION_OBJ:models) model_data
     where base.PROCESS_STEP_ID = '{{ process_step_id }}'
-    group by base.PROCESS_STEP_ID, base.DESTINATION_DATA_CNT_OBJ, base.STEP_EXECUTION_OBJ:execution_timeline
+    group by base.PROCESS_STEP_ID, base.STEP_EXECUTION_OBJ:execution_timeline, base.SOURCE_DATA_CNT, base.DESTINATION_DATA_CNT_OBJ
 ) as source
 on target.PROCESS_STEP_ID = source.process_step_id
 when matched then update set
@@ -79,6 +73,11 @@ when matched then update set
         'COMPLETED: {{ model_name }}',
         true
     ),
-    target.DESTINATION_DATA_CNT_OBJ = source.new_counts
+    target.DESTINATION_DATA_CNT_OBJ = object_insert(
+        coalesce(target.DESTINATION_DATA_CNT_OBJ, parse_json('{}')),
+        '{{ model_name }}',
+        source.destination_row_count,
+        true
+    )
 
 {%- endmacro -%}

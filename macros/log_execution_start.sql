@@ -71,13 +71,6 @@ using (
                 'content', object_construct('model', '{{ model_name }}', 'materialization', '{{ config.get("materialized", "view") }}')
             )
         ) as new_timeline,
-        object_construct(
-            'total_models', coalesce(DESTINATION_DATA_CNT_OBJ:total_models::int, 0) + 1,
-            'success', coalesce(DESTINATION_DATA_CNT_OBJ:success::int, 0),
-            'failed', coalesce(DESTINATION_DATA_CNT_OBJ:failed::int, 0),
-            'skipped', coalesce(DESTINATION_DATA_CNT_OBJ:skipped::int, 0),
-            'running', coalesce(DESTINATION_DATA_CNT_OBJ:running::int, 0) + 1
-        ) as new_counts,
         object_insert(
             coalesce(base.SOURCE_OBJ, parse_json('{}')),
             '{{ model_name }}',
@@ -95,7 +88,8 @@ using (
                 'full_name', '{{ this.database }}.{{ this.schema }}.{{ this.identifier }}'
             ),
             true
-        ) as new_dest_obj
+        ) as new_dest_obj,
+        object_construct() as source_row_counts
     from {{ log_table }} base
     where base.PROCESS_STEP_ID = '{{ process_step_id }}'
 ) as source
@@ -105,6 +99,12 @@ when matched then update set
     target.EXECUTION_STATUS_NAME = 'RUNNING',
     target.SOURCE_OBJ = source.new_source_obj,
     target.DESTINATION_OBJ = source.new_dest_obj,
+    target.SOURCE_DATA_CNT = object_insert(
+        coalesce(target.SOURCE_DATA_CNT, parse_json('{}')),
+        '{{ model_name }}',
+        source.source_row_counts,
+        true
+    ),
     target.STEP_EXECUTION_OBJ = object_insert(
         object_insert(
             object_insert(
@@ -120,7 +120,6 @@ when matched then update set
         'current_step',
         'RUNNING: {{ model_name }}',
         true
-    ),
-    target.DESTINATION_DATA_CNT_OBJ = source.new_counts
+    )
 
 {%- endmacro -%}
