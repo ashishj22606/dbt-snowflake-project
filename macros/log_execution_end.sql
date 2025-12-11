@@ -18,9 +18,9 @@ update {{ log_table }}
 set
     EXECUTION_STATUS_NAME = '{{ execution_status_name }}',
     EXECUTION_COMPLETED_IND = 'Y',
-    EXECUTION_END_TWSTP = CURRENT_TIMESTAMP(),
-    EXTRACT_END_TWSTP = CURRENT_TIMESTAMP(),
-    UPDATE_TWSTP = CURRENT_TIMESTAMP(),
+    EXECUTION_END_TMSTP = CURRENT_TIMESTAMP(),
+    EXTRACT_END_TMSTP = CURRENT_TIMESTAMP(),
+    UPDATE_TMSTP = CURRENT_TIMESTAMP(),
     STEP_EXECUTION_OBJ = parse_json('{"step": "END", "model": "{{ model_name }}", "status": "{{ execution_status_name }}"}'),
     ERROR_MESSAGE_OBJ = {% if error_message is not none %}parse_json('{{ error_message }}'){% else %}null{% endif %}
 where PROCESS_STEP_ID = '{{ process_step_id }}'

@@ -24,20 +24,20 @@ You will get **4 records** in total (1 job + 3 models).
 | PROCESS_STEP_ID | `JOB_abc123-def456-ghi789` | `JOB_abc123-def456-ghi789` |
 | EXECUTION_STATUS_NAME | `RUNNING` | `SUCCESS` |
 | EXECUTION_COMPLETED_IND | `N` | `Y` |
-| EXECUTION_START_TWSTP | `2025-12-10 10:00:00.000` | `2025-12-10 10:00:00.000` |
-| EXECUTION_END_TWSTP | NULL | `2025-12-10 10:05:30.000` |
+| EXECUTION_START_TMSTP | `2025-12-10 10:00:00.000` | `2025-12-10 10:00:00.000` |
+| EXECUTION_END_TMSTP | NULL | `2025-12-10 10:05:30.000` |
 | SOURCE_OBJ | `{"type": "DBT_JOB", "project_name": "dbt_fundamentals"}` | (unchanged) |
 | DESTINATION_OBJ | `{"target_name": "dev", "target_schema": "dbt_ajain"}` | (unchanged) |
 | PROCESS_CONFIG_OBJ | `{"invocation_id": "abc123-def456-ghi789", "project_name": "dbt_fundamentals", "target_name": "dev"}` | (unchanged) |
 | SOURCE_DATA_CNT | NULL | NULL |
 | DESTINATION_DATA_CNT_OBJ | NULL | NULL |
 | EXECUTION_TYPE_NAME | `DBT_JOB_RUN` | `DBT_JOB_RUN` |
-| EXTRACT_START_TWSTP | `2025-12-10 10:00:00.000` | `2025-12-10 10:00:00.000` |
-| EXTRACT_END_TWSTP | NULL | `2025-12-10 10:05:30.000` |
+| EXTRACT_START_TMSTP | `2025-12-10 10:00:00.000` | `2025-12-10 10:00:00.000` |
+| EXTRACT_END_TMSTP | NULL | `2025-12-10 10:05:30.000` |
 | ERROR_MESSAGE_OBJ | NULL | NULL |
 | STEP_EXECUTION_OBJ | `{"step": "JOB_START", "type": "FULL_RUN"}` | `{"step": "JOB_END", "type": "FULL_RUN", "status": "SUCCESS"}` |
-| INSERT_TWSTP | `2025-12-10 10:00:00.000` | `2025-12-10 10:00:00.000` |
-| UPDATE_TWSTP | `2025-12-10 10:00:00.000` | `2025-12-10 10:05:30.000` |
+| INSERT_TMSTP | `2025-12-10 10:00:00.000` | `2025-12-10 10:00:00.000` |
+| UPDATE_TMSTP | `2025-12-10 10:00:00.000` | `2025-12-10 10:05:30.000` |
 | DELETED_IND | `N` | `N` |
 
 ---
@@ -51,20 +51,20 @@ You will get **4 records** in total (1 job + 3 models).
 | PROCESS_STEP_ID | `stg_jaffle_shop__customers_abc123-def456-ghi789` | (same) |
 | EXECUTION_STATUS_NAME | `RUNNING` | `SUCCESS` |
 | EXECUTION_COMPLETED_IND | `N` | `Y` |
-| EXECUTION_START_TWSTP | `2025-12-10 10:00:01.000` | `2025-12-10 10:00:01.000` |
-| EXECUTION_END_TWSTP | NULL | `2025-12-10 10:01:15.000` |
+| EXECUTION_START_TMSTP | `2025-12-10 10:00:01.000` | `2025-12-10 10:00:01.000` |
+| EXECUTION_END_TMSTP | NULL | `2025-12-10 10:01:15.000` |
 | SOURCE_OBJ | `{"model_name": "stg_jaffle_shop__customers", "database": "DEV_DB", "schema": "dbt_ajain"}` | (unchanged) |
 | DESTINATION_OBJ | `{"table": "stg_jaffle_shop__customers", "database": "DEV_DB", "schema": "dbt_ajain"}` | (unchanged) |
 | PROCESS_CONFIG_OBJ | `{"invocation_id": "abc123-def456-ghi789", "project_name": "dbt_fundamentals"}` | (unchanged) |
 | SOURCE_DATA_CNT | NULL | NULL |
 | DESTINATION_DATA_CNT_OBJ | NULL | NULL |
 | EXECUTION_TYPE_NAME | `DBT_MODEL_RUN` | `DBT_MODEL_RUN` |
-| EXTRACT_START_TWSTP | `2025-12-10 10:00:01.000` | `2025-12-10 10:00:01.000` |
-| EXTRACT_END_TWSTP | NULL | `2025-12-10 10:01:15.000` |
+| EXTRACT_START_TMSTP | `2025-12-10 10:00:01.000` | `2025-12-10 10:00:01.000` |
+| EXTRACT_END_TMSTP | NULL | `2025-12-10 10:01:15.000` |
 | ERROR_MESSAGE_OBJ | NULL | NULL |
 | STEP_EXECUTION_OBJ | `{"step": "START", "model": "stg_jaffle_shop__customers"}` | `{"step": "END", "model": "stg_jaffle_shop__customers", "status": "SUCCESS"}` |
-| INSERT_TWSTP | `2025-12-10 10:00:01.000` | `2025-12-10 10:00:01.000` |
-| UPDATE_TWSTP | `2025-12-10 10:00:01.000` | `2025-12-10 10:01:15.000` |
+| INSERT_TMSTP | `2025-12-10 10:00:01.000` | `2025-12-10 10:00:01.000` |
+| UPDATE_TMSTP | `2025-12-10 10:00:01.000` | `2025-12-10 10:01:15.000` |
 | DELETED_IND | `N` | `N` |
 
 ---
@@ -78,20 +78,20 @@ You will get **4 records** in total (1 job + 3 models).
 | PROCESS_STEP_ID | `stg_jaffle_shop__orders_abc123-def456-ghi789` | (same) |
 | EXECUTION_STATUS_NAME | `RUNNING` | `SUCCESS` |
 | EXECUTION_COMPLETED_IND | `N` | `Y` |
-| EXECUTION_START_TWSTP | `2025-12-10 10:01:16.000` | `2025-12-10 10:01:16.000` |
-| EXECUTION_END_TWSTP | NULL | `2025-12-10 10:02:30.000` |
+| EXECUTION_START_TMSTP | `2025-12-10 10:01:16.000` | `2025-12-10 10:01:16.000` |
+| EXECUTION_END_TMSTP | NULL | `2025-12-10 10:02:30.000` |
 | SOURCE_OBJ | `{"model_name": "stg_jaffle_shop__orders", "database": "DEV_DB", "schema": "dbt_ajain"}` | (unchanged) |
 | DESTINATION_OBJ | `{"table": "stg_jaffle_shop__orders", "database": "DEV_DB", "schema": "dbt_ajain"}` | (unchanged) |
 | PROCESS_CONFIG_OBJ | `{"invocation_id": "abc123-def456-ghi789", "project_name": "dbt_fundamentals"}` | (unchanged) |
 | SOURCE_DATA_CNT | NULL | NULL |
 | DESTINATION_DATA_CNT_OBJ | NULL | NULL |
 | EXECUTION_TYPE_NAME | `DBT_MODEL_RUN` | `DBT_MODEL_RUN` |
-| EXTRACT_START_TWSTP | `2025-12-10 10:01:16.000` | `2025-12-10 10:01:16.000` |
-| EXTRACT_END_TWSTP | NULL | `2025-12-10 10:02:30.000` |
+| EXTRACT_START_TMSTP | `2025-12-10 10:01:16.000` | `2025-12-10 10:01:16.000` |
+| EXTRACT_END_TMSTP | NULL | `2025-12-10 10:02:30.000` |
 | ERROR_MESSAGE_OBJ | NULL | NULL |
 | STEP_EXECUTION_OBJ | `{"step": "START", "model": "stg_jaffle_shop__orders"}` | `{"step": "END", "model": "stg_jaffle_shop__orders", "status": "SUCCESS"}` |
-| INSERT_TWSTP | `2025-12-10 10:01:16.000` | `2025-12-10 10:01:16.000` |
-| UPDATE_TWSTP | `2025-12-10 10:01:16.000` | `2025-12-10 10:02:30.000` |
+| INSERT_TMSTP | `2025-12-10 10:01:16.000` | `2025-12-10 10:01:16.000` |
+| UPDATE_TMSTP | `2025-12-10 10:01:16.000` | `2025-12-10 10:02:30.000` |
 | DELETED_IND | `N` | `N` |
 
 ---
@@ -105,20 +105,20 @@ You will get **4 records** in total (1 job + 3 models).
 | PROCESS_STEP_ID | `dim_customers_abc123-def456-ghi789` | (same) |
 | EXECUTION_STATUS_NAME | `RUNNING` | `SUCCESS` |
 | EXECUTION_COMPLETED_IND | `N` | `Y` |
-| EXECUTION_START_TWSTP | `2025-12-10 10:02:31.000` | `2025-12-10 10:02:31.000` |
-| EXECUTION_END_TWSTP | NULL | `2025-12-10 10:05:25.000` |
+| EXECUTION_START_TMSTP | `2025-12-10 10:02:31.000` | `2025-12-10 10:02:31.000` |
+| EXECUTION_END_TMSTP | NULL | `2025-12-10 10:05:25.000` |
 | SOURCE_OBJ | `{"model_name": "dim_customers", "database": "DEV_DB", "schema": "dbt_ajain"}` | (unchanged) |
 | DESTINATION_OBJ | `{"table": "dim_customers", "database": "DEV_DB", "schema": "dbt_ajain"}` | (unchanged) |
 | PROCESS_CONFIG_OBJ | `{"invocation_id": "abc123-def456-ghi789", "project_name": "dbt_fundamentals"}` | (unchanged) |
 | SOURCE_DATA_CNT | NULL | NULL |
 | DESTINATION_DATA_CNT_OBJ | NULL | NULL |
 | EXECUTION_TYPE_NAME | `DBT_MODEL_RUN` | `DBT_MODEL_RUN` |
-| EXTRACT_START_TWSTP | `2025-12-10 10:02:31.000` | `2025-12-10 10:02:31.000` |
-| EXTRACT_END_TWSTP | NULL | `2025-12-10 10:05:25.000` |
+| EXTRACT_START_TMSTP | `2025-12-10 10:02:31.000` | `2025-12-10 10:02:31.000` |
+| EXTRACT_END_TMSTP | NULL | `2025-12-10 10:05:25.000` |
 | ERROR_MESSAGE_OBJ | NULL | NULL |
 | STEP_EXECUTION_OBJ | `{"step": "START", "model": "dim_customers"}` | `{"step": "END", "model": "dim_customers", "status": "SUCCESS"}` |
-| INSERT_TWSTP | `2025-12-10 10:02:31.000` | `2025-12-10 10:02:31.000` |
-| UPDATE_TWSTP | `2025-12-10 10:02:31.000` | `2025-12-10 10:05:25.000` |
+| INSERT_TMSTP | `2025-12-10 10:02:31.000` | `2025-12-10 10:02:31.000` |
+| UPDATE_TMSTP | `2025-12-10 10:02:31.000` | `2025-12-10 10:05:25.000` |
 | DELETED_IND | `N` | `N` |
 
 ---
