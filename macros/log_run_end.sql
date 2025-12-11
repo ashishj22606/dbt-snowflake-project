@@ -131,7 +131,10 @@ when matched then update set
                 ),
                 'content', object_construct(
                     'job_status', '{{ job_status }}',
-                    'models_summary', source.final_models_summary
+                    'total_models', {{ ns.total_count }},
+                    'successful_models', {{ ns.success_count }},
+                    'failed_models', {{ ns.error_count }},
+                    'skipped_models', {{ ns.skip_count }}
                 )
             )
         ),
