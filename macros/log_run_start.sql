@@ -37,7 +37,7 @@ select
     'N' as EXECUTION_COMPLETED_IND,
     CURRENT_TIMESTAMP() as EXECUTION_START_TMSTP,
     null::TIMESTAMP_NTZ as EXECUTION_END_TMSTP,
-    parse_json('{"source_type":"DBT_PROJECT","project_name":"{{ project_name }}","dbt_version":"{{ dbt_version }}","run_started_at":"{{ run_started_at }}"}') as SOURCE_OBJ,
+    parse_json('{}') as SOURCE_OBJ,
     parse_json('{"target_name":"{{ target.name }}","target_schema":"{{ target.schema }}","target_database":"{{ target.database }}","target_type":"{{ target.type }}","threads":{{ target.threads }},"warehouse":"{{ target.warehouse }}"}') as DESTINATION_OBJ,
     parse_json('{"invocation_id":"{{ run_id }}","project_name":"{{ project_name }}","target_name":"{{ target.name }}","dbt_version":"{{ dbt_version }}","run_started_at":"{{ run_started_at }}","which":"run","full_refresh":false}') as PROCESS_CONFIG_OBJ,
     0 as SOURCE_DATA_CNT,

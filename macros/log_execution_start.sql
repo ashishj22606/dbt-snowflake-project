@@ -3,13 +3,43 @@
 {#- 
     This macro UPDATES the single job record when a model STARTS executing.
     Appends model to array with config details and adds timeline event.
-    Captures query ID for tracking in Snowflake.
+    Captures query ID and source dependencies for tracking.
 -#}
 
 {% set log_table = 'DEV_PROVIDERPDM.PROVIDERPDM_CORE_TARGET.PROCESS_EXECUTION_LOG' %}
 {% set model_name = this.name %}
 {% set run_id = invocation_id %}
 {% set process_step_id = 'JOB_' ~ run_id %}
+
+{#- Build source dependencies object -#}
+{% set sources_dict = {} %}
+{% set source_counter = 1 %}
+
+{% if model.depends_on is defined and model.depends_on.nodes is defined %}
+    {% for node_id in model.depends_on.nodes %}
+        {% set node_parts = node_id.split('.') %}
+        {% if node_parts[0] == 'source' %}
+            {#- This is a source() reference -#}
+            {% set source_name = node_parts[1] ~ '.' ~ node_parts[2] %}
+            {% set source_key = 'source_' ~ source_counter %}
+            {% do sources_dict.update({source_key: {'type': 'source', 'name': source_name, 'node_id': node_id}}) %}
+            {% set source_counter = source_counter + 1 %}
+        {% elif node_parts[0] == 'model' %}
+            {#- This is a ref() reference -#}
+            {% set ref_name = node_parts[2] %}
+            {% set source_key = 'source_' ~ source_counter %}
+            {% do sources_dict.update({source_key: {'type': 'ref', 'name': ref_name, 'node_id': node_id}}) %}
+            {% set source_counter = source_counter + 1 %}
+        {% endif %}
+    {% endfor %}
+{% endif %}
+
+{#- Build JSON string for sources -#}
+{% set sources_json_parts = [] %}
+{% for key, val in sources_dict.items() %}
+    {% do sources_json_parts.append('"' ~ key ~ '":{"type":"' ~ val.type ~ '","name":"' ~ val.name ~ '","node_id":"' ~ val.node_id ~ '"}') %}
+{% endfor %}
+{% set sources_json = '{' ~ sources_json_parts | join(',') ~ '}' %}
 
 merge into {{ log_table }} as target
 using (
@@ -47,14 +77,21 @@ using (
             'failed', coalesce(DESTINATION_DATA_CNT_OBJ:failed::int, 0),
             'skipped', coalesce(DESTINATION_DATA_CNT_OBJ:skipped::int, 0),
             'running', coalesce(DESTINATION_DATA_CNT_OBJ:running::int, 0) + 1
-        ) as new_counts
-    from {{ log_table }}
-    where PROCESS_STEP_ID = '{{ process_step_id }}'
+        ) as new_counts,
+        object_insert(
+            coalesce(base.SOURCE_OBJ, parse_json('{}')),
+            '{{ model_name }}',
+            parse_json('{{ sources_json }}'),
+            true
+        ) as new_source_obj
+    from {{ log_table }} base
+    where base.PROCESS_STEP_ID = '{{ process_step_id }}'
 ) as source
 on target.PROCESS_STEP_ID = source.process_step_id
 when matched then update set
     target.UPDATE_TMSTP = current_timestamp(),
     target.EXECUTION_STATUS_NAME = 'RUNNING',
+    target.SOURCE_OBJ = source.new_source_obj,
     target.STEP_EXECUTION_OBJ = object_insert(
         object_insert(
             object_insert(
