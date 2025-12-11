@@ -177,11 +177,89 @@ SELECT
     EXECUTION_END_TMSTP,
     TIMESTAMPDIFF(SECOND, EXECUTION_START_TMSTP, EXECUTION_END_TMSTP) AS total_duration_seconds,
     DESTINATION_DATA_CNT_OBJ:total_models::INT AS total_models,
-    DESTINATION_DATA_CNT_OBJ:completed::INT AS completed_models,
-    DESTINATION_DATA_CNT_OBJ:failed::INT AS failed_models
+    DESTINATION_DATA_CNT_OBJ:success::INT AS success_models,
+    DESTINATION_DATA_CNT_OBJ:failed::INT AS failed_models,
+    DESTINATION_DATA_CNT_OBJ:skipped::INT AS skipped_models
 FROM DEV_PROVIDERPDM.PROVIDERPDM_CORE_TARGET.PROCESS_EXECUTION_LOG
 WHERE EXECUTION_TYPE_NAME = 'DBT_JOB_RUN'
 ORDER BY INSERT_TMSTP DESC;
+```
+
+### Get failed models only:
+
+```sql
+SELECT 
+    PROCESS_STEP_ID,
+    f.value:model_name::STRING AS model_name,
+    f.value:status::STRING AS status,
+    f.value:error::STRING AS error_message,
+    f.value:execution_time_seconds::FLOAT AS execution_time_seconds
+FROM DEV_PROVIDERPDM.PROVIDERPDM_CORE_TARGET.PROCESS_EXECUTION_LOG,
+LATERAL FLATTEN(input => STEP_EXECUTION_OBJ:models) f
+WHERE f.value:status::STRING = 'FAILED';
+```
+
+---
+
+## Error Handling
+
+### How Errors Are Captured
+
+The `on-run-end` hook uses dbt's `results` variable which contains the execution result for every model, including failures. This is the **authoritative source** for determining job status.
+
+### Job Status Logic
+
+| Condition | EXECUTION_STATUS_NAME |
+|-----------|----------------------|
+| All models succeed | `SUCCESS` |
+| 1 or more models fail | `FAILED` |
+
+### Example: Job with Errors
+
+When 2 out of 3 models fail:
+
+**EXECUTION_STATUS_NAME**: `FAILED`
+
+**DESTINATION_DATA_CNT_OBJ**:
+```json
+{
+    "total_models": 3,
+    "success": 1,
+    "failed": 2,
+    "skipped": 0
+}
+```
+
+**ERROR_MESSAGE_OBJ**:
+```json
+{
+    "error_count": 2,
+    "message": "2 model(s) failed during execution"
+}
+```
+
+**STEP_EXECUTION_OBJ.models**:
+```json
+[
+    {
+        "model_name": "stg_jaffle_shop__customers",
+        "status": "SUCCESS",
+        "execution_time_seconds": 1.25,
+        "error": ""
+    },
+    {
+        "model_name": "stg_jaffle_shop__orders",
+        "status": "FAILED",
+        "execution_time_seconds": 0.5,
+        "error": "Database error: relation does not exist"
+    },
+    {
+        "model_name": "dim_customers",
+        "status": "SKIPPED",
+        "execution_time_seconds": 0,
+        "error": ""
+    }
+]
 ```
 
 ---
@@ -189,24 +267,8 @@ ORDER BY INSERT_TMSTP DESC;
 ## Key Benefits
 
 1. **Single Record Per Job**: Easy to track and query
-2. **Real-Time Updates**: Record updates as each model executes
-3. **All Details in One Place**: `STEP_EXECUTION_OBJ.models` contains all model info
-4. **Summary Counts**: `DESTINATION_DATA_CNT_OBJ` shows progress at a glance
-5. **Queryable**: Use Snowflake's FLATTEN to extract individual model details
-| `stg_jaffle_shop__customers_abc123...` | `DBT_MODEL_RUN` | SUCCESS | 1m 14s |
-| `stg_jaffle_shop__orders_abc123...` | `DBT_MODEL_RUN` | SUCCESS | 1m 14s |
-| `dim_customers_abc123...` | `DBT_MODEL_RUN` | SUCCESS | 2m 54s |
-
----
-
-## Key Points
-
-1. **Unique Identifier**: Each record uses `model_name + invocation_id` as `PROCESS_STEP_ID` to ensure uniqueness per run.
-
-2. **Real-Time Updates**: Records are inserted at START with `EXECUTION_STATUS_NAME = 'RUNNING'` and updated at END with `SUCCESS`.
-
-3. **Snowflake Server Time**: All timestamps use `CURRENT_TIMESTAMP()` from Snowflake.
-
-4. **VARIANT Columns**: JSON objects are stored in VARIANT columns for flexible metadata storage.
-
-5. **1 Record Per Model Per Run**: The `invocation_id` ensures that each dbt run creates new records, not duplicates.
+2. **Accurate Error Tracking**: Uses dbt's `results` variable to capture ALL outcomes
+3. **Job Status Reflects Reality**: Status is `FAILED` if ANY model fails
+4. **All Details in One Place**: `STEP_EXECUTION_OBJ.models` contains all model info
+5. **Summary Counts**: `DESTINATION_DATA_CNT_OBJ` shows success/failed/skipped counts
+6. **Queryable**: Use Snowflake's FLATTEN to extract individual model details
