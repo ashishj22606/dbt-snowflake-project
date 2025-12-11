@@ -78,10 +78,23 @@ using (
     select 
         '{{ process_step_id }}' as process_step_id,
         parse_json('{{ models_json }}') as final_models_summary,
+        base.STEP_EXECUTION_OBJ as current_step_obj,
+        base.STEP_EXECUTION_OBJ:execution_timeline as current_timeline
+    from {{ log_table }} base
+    where base.PROCESS_STEP_ID = '{{ process_step_id }}'
+) as source
+on target.PROCESS_STEP_ID = source.process_step_id
+when matched then update set
+    target.EXECUTION_STATUS_NAME = '{{ job_status }}',
+    target.EXECUTION_COMPLETED_IND = 'Y',
+    target.EXECUTION_END_TMSTP = CURRENT_TIMESTAMP(),
+    target.EXTRACT_END_TMSTP = CURRENT_TIMESTAMP(),
+    target.UPDATE_TMSTP = CURRENT_TIMESTAMP(),
+    target.STEP_EXECUTION_OBJ = object_insert(
         object_insert(
             object_insert(
                 object_insert(
-                    coalesce(base.STEP_EXECUTION_OBJ, parse_json('{}')),
+                    coalesce(source.current_step_obj, parse_json('{}')),
                     'current_step',
                     'JOB_COMPLETED',
                     true
@@ -98,11 +111,12 @@ using (
                 'skipped', {{ ns.skip_count }}
             ),
             true
-        ) as updated_step_obj,
+        ),
+        'execution_timeline',
         array_append(
-            coalesce(base.STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]')),
+            coalesce(source.current_timeline, parse_json('[]')),
             object_construct(
-                'step_number', array_size(coalesce(base.STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]'))) + 1,
+                'step_number', array_size(coalesce(source.current_timeline, parse_json('[]'))) + 1,
                 'timestamp', to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3'),
                 'level', '{% if ns.error_count > 0 %}Error{% else %}Info{% endif %}',
                 'step_type', 'JOB_COMPLETE',
@@ -117,25 +131,10 @@ using (
                 ),
                 'content', object_construct(
                     'job_status', '{{ job_status }}',
-                    'models_summary', base.final_models_summary
+                    'models_summary', source.final_models_summary
                 )
             )
-        ) as final_timeline
-    from {{ log_table }} base
-    cross join (select parse_json('{{ models_json }}') as final_models_summary) models
-    where base.PROCESS_STEP_ID = '{{ process_step_id }}'
-) as source
-on target.PROCESS_STEP_ID = source.process_step_id
-when matched then update set
-    target.EXECUTION_STATUS_NAME = '{{ job_status }}',
-    target.EXECUTION_COMPLETED_IND = 'Y',
-    target.EXECUTION_END_TMSTP = CURRENT_TIMESTAMP(),
-    target.EXTRACT_END_TMSTP = CURRENT_TIMESTAMP(),
-    target.UPDATE_TMSTP = CURRENT_TIMESTAMP(),
-    target.STEP_EXECUTION_OBJ = object_insert(
-        source.updated_step_obj,
-        'execution_timeline',
-        source.final_timeline,
+        ),
         true
     ),
     target.ERROR_MESSAGE_OBJ = {% if ns.error_count > 0 %}parse_json('{"error_count":{{ ns.error_count }},"errors":{{ error_json }}}'){% else %}parse_json('null'){% endif %}
