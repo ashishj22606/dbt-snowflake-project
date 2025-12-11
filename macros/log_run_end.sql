@@ -80,7 +80,6 @@ set
     EXECUTION_END_TMSTP = CURRENT_TIMESTAMP(),
     EXTRACT_END_TMSTP = CURRENT_TIMESTAMP(),
     UPDATE_TMSTP = CURRENT_TIMESTAMP(),
-    DESTINATION_DATA_CNT_OBJ = parse_json('{"total_models":{{ ns.total_count }},"success":{{ ns.success_count }},"failed":{{ ns.error_count }},"skipped":{{ ns.skip_count }},"running":0}'),
     STEP_EXECUTION_OBJ = parse_json('{"current_step":"JOB_COMPLETED","job_status":"{{ job_status }}","summary":{"total":{{ ns.total_count }},"success":{{ ns.success_count }},"error":{{ ns.error_count }},"skipped":{{ ns.skip_count }}},"models":{{ models_json }}}'),
     ERROR_MESSAGE_OBJ = {% if ns.error_count > 0 %}parse_json('{"error_count":{{ ns.error_count }},"errors":{{ error_json }}}'){% else %}parse_json('null'){% endif %}
 where PROCESS_STEP_ID = '{{ process_step_id }}'

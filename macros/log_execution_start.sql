@@ -41,6 +41,25 @@
 {% endfor %}
 {% set sources_json = '{' ~ sources_json_parts | join(',') ~ '}' %}
 
+{#- Determine execution type based on materialization and full_refresh -#}
+{% set materialization = config.get("materialized", "view") %}
+{% set is_full_refresh = flags.FULL_REFRESH | default(false) %}
+{% if materialization == 'incremental' %}
+    {% if is_full_refresh %}
+        {% set execution_type = 'TRUNCATE_FULL_LOAD' %}
+    {% else %}
+        {% set execution_type = 'INCREMENTAL_LOAD' %}
+    {% endif %}
+{% elif materialization == 'table' %}
+    {% set execution_type = 'TRUNCATE_FULL_LOAD' %}
+{% elif materialization == 'view' %}
+    {% set execution_type = 'VIEW_REFRESH' %}
+{% elif materialization == 'ephemeral' %}
+    {% set execution_type = 'CTE_EPHEMERAL' %}
+{% else %}
+    {% set execution_type = 'FULL_LOAD' %}
+{% endif %}
+
 merge into {{ log_table }} as target
 using (
     select 
@@ -52,7 +71,8 @@ using (
                 'database', '{{ this.database }}',
                 'schema', '{{ this.schema }}',
                 'alias', '{{ this.identifier }}',
-                'materialization', '{{ config.get("materialized", "view") }}',
+                'materialization', '{{ materialization }}',
+                'execution_type', '{{ execution_type }}',
                 'status', 'RUNNING',
                 'start_time', to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3'),
                 'end_time', null,
@@ -84,7 +104,8 @@ using (
                 'database', '{{ this.database }}',
                 'schema', '{{ this.schema }}',
                 'table', '{{ this.identifier }}',
-                'materialization', '{{ config.get("materialized", "view") }}',
+                'materialization', '{{ materialization }}',
+                'execution_type', '{{ execution_type }}',
                 'full_name', '{{ this.database }}.{{ this.schema }}.{{ this.identifier }}'
             ),
             true
@@ -96,6 +117,7 @@ on target.PROCESS_STEP_ID = source.process_step_id
 when matched then update set
     target.UPDATE_TMSTP = current_timestamp(),
     target.EXECUTION_STATUS_NAME = 'RUNNING',
+    target.EXECUTION_TYPE_NAME = '{{ execution_type }}',
     target.SOURCE_OBJ = source.new_source_obj,
     target.DESTINATION_OBJ = source.new_dest_obj,
     target.STEP_EXECUTION_OBJ = object_insert(
