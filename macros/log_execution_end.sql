@@ -16,24 +16,35 @@
 {% set source_counter = 1 %}
 {% set current_model_id = model.unique_id if model.unique_id is defined else ('model.' ~ project_name ~ '.' ~ this.name) %}
 
+{{ log("=== POST-HOOK DEBUG for " ~ this.name ~ " ===", info=true) }}
+{{ log("current_model_id: " ~ current_model_id, info=true) }}
+
 {% if graph is defined and graph.nodes is defined and current_model_id in graph.nodes %}
     {% set current_node = graph.nodes[current_model_id] %}
+    {{ log("Found in graph.nodes", info=true) }}
     
     {% if current_node.depends_on is defined and current_node.depends_on.nodes is defined %}
+        {{ log("Dependencies found: " ~ (current_node.depends_on.nodes | length), info=true) }}
+        {{ log("Full dependency list: " ~ current_node.depends_on.nodes, info=true) }}
+        
         {% for node_id in current_node.depends_on.nodes %}
+            {{ log("Processing: " ~ node_id, info=true) }}
             {% set node_parts = node_id.split('.') %}
             {% set node_type = node_parts[0] %}
+            {{ log("  Type: " ~ node_type, info=true) }}
             
             {% if node_type == 'source' %}
                 {% set source_name = node_parts[1] ~ '.' ~ node_parts[2] %}
                 {% set source_key = 'source_' ~ source_counter %}
                 {% do sources_dict.update({source_key: {'type': 'source', 'name': source_name, 'node_id': node_id}}) %}
+                {{ log("  Added SOURCE: " ~ source_name, info=true) }}
                 {% set source_counter = source_counter + 1 %}
                 
             {% elif node_type == 'model' %}
                 {% set ref_name = node_parts[2] %}
                 {% set source_key = 'source_' ~ source_counter %}
                 {% do sources_dict.update({source_key: {'type': 'ref', 'name': ref_name, 'node_id': node_id}}) %}
+                {{ log("  Added REF: " ~ ref_name, info=true) }}
                 {% set source_counter = source_counter + 1 %}
                 
             {% elif node_type == 'seed' %}
@@ -73,7 +84,13 @@
                 {% set source_counter = source_counter + 1 %}
             {% endif %}
         {% endfor %}
+        {{ log("Total captured: " ~ (sources_dict | length), info=true) }}
+        {{ log("Sources dict: " ~ sources_dict, info=true) }}
+    {% else %}
+        {{ log("depends_on.nodes NOT available", info=true) }}
     {% endif %}
+{% else %}
+    {{ log("Model NOT in graph or graph unavailable", info=true) }}
 {% endif %}
 
 {#- Build JSON string for sources -#}
