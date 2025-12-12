@@ -19,32 +19,14 @@
 {#- Get the current model's unique_id -#}
 {% set current_model_id = model.unique_id if model.unique_id is defined else ('model.' ~ project_name ~ '.' ~ this.name) %}
 
-{{ log("=== DEPENDENCY DEBUG for " ~ this.name ~ " ===", info=true) }}
-{{ log("Model unique_id: " ~ current_model_id, info=true) }}
-{% if graph is defined %}
-    {{ log("Graph: AVAILABLE", info=true) }}
-    {% if graph.nodes is defined %}
-        {{ log("Graph.nodes: AVAILABLE", info=true) }}
-    {% else %}
-        {{ log("Graph.nodes: NOT AVAILABLE", info=true) }}
-    {% endif %}
-{% else %}
-    {{ log("Graph: NOT AVAILABLE", info=true) }}
-{% endif %}
-
-{#- Try to get dependencies from the graph object (most reliable in hooks) -#}
+{#- Try to get dependencies from the graph object -#}
 {% if graph is defined and graph.nodes is defined and current_model_id in graph.nodes %}
     {% set current_node = graph.nodes[current_model_id] %}
-    {{ log("Found model in graph.nodes", info=true) }}
     
     {% if current_node.depends_on is defined and current_node.depends_on.nodes is defined %}
-        {{ log("Dependencies count: " ~ (current_node.depends_on.nodes | length), info=true) }}
-        
         {% for node_id in current_node.depends_on.nodes %}
-            {{ log("Processing dependency: " ~ node_id, info=true) }}
             {% set node_parts = node_id.split('.') %}
             {% set node_type = node_parts[0] %}
-            {{ log("Node type: " ~ node_type, info=true) }}
             
             {% if node_type == 'source' %}
                 {#- This is a source() reference -#}
@@ -75,21 +57,21 @@
                 {% set source_counter = source_counter + 1 %}
                 
             {% elif node_type == 'test' %}
-                {#- This is a test dependency (rare but possible) -#}
+                {#- This is a test dependency -#}
                 {% set test_name = node_parts[2] %}
                 {% set source_key = 'source_' ~ source_counter %}
                 {% do sources_dict.update({source_key: {'type': 'test', 'name': test_name, 'node_id': node_id}}) %}
                 {% set source_counter = source_counter + 1 %}
                 
             {% elif node_type == 'analysis' %}
-                {#- This is an analysis dependency (rare but possible) -#}
+                {#- This is an analysis dependency -#}
                 {% set analysis_name = node_parts[2] %}
                 {% set source_key = 'source_' ~ source_counter %}
                 {% do sources_dict.update({source_key: {'type': 'analysis', 'name': analysis_name, 'node_id': node_id}}) %}
                 {% set source_counter = source_counter + 1 %}
                 
             {% elif node_type == 'exposure' %}
-                {#- This is an exposure dependency (rare but possible) -#}
+                {#- This is an exposure dependency -#}
                 {% set exposure_name = node_parts[2] %}
                 {% set source_key = 'source_' ~ source_counter %}
                 {% do sources_dict.update({source_key: {'type': 'exposure', 'name': exposure_name, 'node_id': node_id}}) %}
@@ -103,48 +85,7 @@
                 {% set source_counter = source_counter + 1 %}
             {% endif %}
         {% endfor %}
-        
-        {{ log("Total sources captured: " ~ (sources_dict | length), info=true) }}
-    {% else %}
-        {{ log("Dependencies count: 0 (depends_on not available)", info=true) }}
     {% endif %}
-    
-{% elif model.depends_on is defined and model.depends_on.nodes is defined %}
-    {{ log("Using fallback: model.depends_on", info=true) }}
-    {{ log("Dependencies count: " ~ (model.depends_on.nodes | length), info=true) }}
-    {#- Fallback: Try model.depends_on if graph is not available -#}
-    {% for node_id in model.depends_on.nodes %}
-        {% set node_parts = node_id.split('.') %}
-        {% set node_type = node_parts[0] %}
-        
-        {% if node_type == 'source' %}
-            {% set source_name = node_parts[1] ~ '.' ~ node_parts[2] %}
-            {% set source_key = 'source_' ~ source_counter %}
-            {% do sources_dict.update({source_key: {'type': 'source', 'name': source_name, 'node_id': node_id}}) %}
-            {% set source_counter = source_counter + 1 %}
-            
-        {% elif node_type == 'model' %}
-            {% set ref_name = node_parts[2] %}
-            {% set source_key = 'source_' ~ source_counter %}
-            {% do sources_dict.update({source_key: {'type': 'ref', 'name': ref_name, 'node_id': node_id}}) %}
-            {% set source_counter = source_counter + 1 %}
-            
-        {% elif node_type == 'seed' %}
-            {% set seed_name = node_parts[2] %}
-            {% set source_key = 'source_' ~ source_counter %}
-            {% do sources_dict.update({source_key: {'type': 'seed', 'name': seed_name, 'node_id': node_id}}) %}
-            {% set source_counter = source_counter + 1 %}
-            
-        {% elif node_type == 'snapshot' %}
-            {% set snapshot_name = node_parts[2] %}
-            {% set source_key = 'source_' ~ source_counter %}
-            {% do sources_dict.update({source_key: {'type': 'snapshot', 'name': snapshot_name, 'node_id': node_id}}) %}
-            {% set source_counter = source_counter + 1 %}
-        {% endif %}
-    {% endfor %}
-    {{ log("Total sources captured (fallback): " ~ (sources_dict | length), info=true) }}
-{% else %}
-    {{ log("WARNING: No dependency info available!", info=true) }}
 {% endif %}
 
 {#- Build JSON string for sources -#}
