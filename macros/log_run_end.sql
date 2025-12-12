@@ -102,12 +102,10 @@ set
             object_insert(
                 STEP_EXECUTION_OBJ,
                 'current_step',
-                'JOB_COMPLETED',
-                true
+                'JOB_COMPLETED'
             ),
             'job_status',
-            '{{ job_status }}',
-            true
+            '{{ job_status }}'
         ),
         'execution_timeline',
         array_append(
@@ -135,8 +133,7 @@ set
                     'models_summary', parse_json('{{ models_json }}', 'd')
                 )
             )
-        ),
-        true
+        )
     ),
     ERROR_MESSAGE_OBJ = {% if ns.error_count > 0 %}parse_json('{"error_count":{{ ns.error_count }},"errors":{{ error_json }}}', 'd'){% else %}null{% endif %}
 where PROCESS_STEP_ID = '{{ process_step_id }}'
