@@ -19,9 +19,29 @@
 {#- Get the current model's unique_id -#}
 {% set current_model_id = model.unique_id if model.unique_id is defined else ('model.' ~ project_name ~ '.' ~ this.name) %}
 
+{{ log("DEBUG: Model = " ~ this.name, info=true) }}
+{{ log("DEBUG: current_model_id = " ~ current_model_id, info=true) }}
+
 {#- Try to get dependencies from the graph object -#}
 {% if graph is defined and graph.nodes is defined and current_model_id in graph.nodes %}
     {% set current_node = graph.nodes[current_model_id] %}
+    {{ log("DEBUG: Found in graph.nodes", info=true) }}
+    {{ log("DEBUG: current_node keys = " ~ (current_node.keys() | list), info=true) }}
+    
+    {% if current_node.depends_on is defined %}
+        {{ log("DEBUG: depends_on = " ~ current_node.depends_on, info=true) }}
+        {% if current_node.depends_on.nodes is defined %}
+            {{ log("DEBUG: depends_on.nodes = " ~ current_node.depends_on.nodes, info=true) }}
+            {{ log("DEBUG: depends_on.nodes count = " ~ (current_node.depends_on.nodes | length), info=true) }}
+        {% else %}
+            {{ log("DEBUG: depends_on.nodes is NOT defined", info=true) }}
+        {% endif %}
+    {% else %}
+        {{ log("DEBUG: depends_on is NOT defined", info=true) }}
+    {% endif %}
+{% else %}
+    {{ log("DEBUG: Model NOT found in graph.nodes or graph not available", info=true) }}
+{% endif %}
     
     {% if current_node.depends_on is defined and current_node.depends_on.nodes is defined %}
         {% for node_id in current_node.depends_on.nodes %}
