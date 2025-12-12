@@ -73,31 +73,35 @@
 {% endfor %}
 {% set error_json = '[' ~ error_json_parts | join(',') ~ ']' %}
 
-begin;
-
--- Update any MODEL records still in RUNNING state to FAILED
-update {{ log_table }}
-set
-    EXECUTION_STATUS_NAME = 'FAILED',
-    EXECUTION_COMPLETED_IND = 'Y',
-    EXECUTION_END_TMSTP = CURRENT_TIMESTAMP(),
-    EXTRACT_END_TMSTP = CURRENT_TIMESTAMP(),
-    UPDATE_TMSTP = CURRENT_TIMESTAMP(),
-    ERROR_MESSAGE_OBJ = object_construct('error', 'Model failed - see dbt logs for details'),
-    STEP_EXECUTION_OBJ = object_insert(
-        STEP_EXECUTION_OBJ,
-        'current_step',
-        'MODEL_FAILED',
-        true
-    )
-where PROCESS_STEP_ID = '{{ process_step_id }}'
-  and RECORD_TYPE = 'MODEL'
-  and EXECUTION_STATUS_NAME = 'RUNNING';
-
--- Update JOB record
-update {{ log_table }}
-set
-    EXECUTION_STATUS_NAME = '{{ job_status }}',
+merge into {{ log_table }} as target
+using (
+    select 
+        PROCESS_STEP_ID,
+        RECORD_TYPE,
+        MODEL_NAME,
+        case 
+            when RECORD_TYPE = 'JOB' then '{{ job_status }}'
+            when RECORD_TYPE = 'MODEL' and EXECUTION_STATUS_NAME = 'RUNNING' then 'FAILED'
+            else EXECUTION_STATUS_NAME
+        end as NEW_STATUS
+    from {{ log_table }}
+    where PROCESS_STEP_ID = '{{ process_step_id }}'
+) as source
+on target.PROCESS_STEP_ID = source.PROCESS_STEP_ID 
+   and target.RECORD_TYPE = source.RECORD_TYPE
+   and (target.MODEL_NAME = source.MODEL_NAME or (target.MODEL_NAME is null and source.MODEL_NAME is null))
+when matched and source.RECORD_TYPE = 'MODEL' and source.NEW_STATUS = 'FAILED' then
+    update set
+        EXECUTION_STATUS_NAME = 'FAILED',
+        EXECUTION_COMPLETED_IND = 'Y',
+        EXECUTION_END_TMSTP = CURRENT_TIMESTAMP(),
+        EXTRACT_END_TMSTP = CURRENT_TIMESTAMP(),
+        UPDATE_TMSTP = CURRENT_TIMESTAMP(),
+        ERROR_MESSAGE_OBJ = object_construct('error', 'Model failed - see dbt logs for details'),
+        STEP_EXECUTION_OBJ = object_insert(STEP_EXECUTION_OBJ, 'current_step', 'MODEL_FAILED', true)
+when matched and source.RECORD_TYPE = 'JOB' then
+    update set
+        EXECUTION_STATUS_NAME = '{{ job_status }}',
     EXECUTION_COMPLETED_IND = 'Y',
     EXECUTION_END_TMSTP = CURRENT_TIMESTAMP(),
     EXTRACT_END_TMSTP = CURRENT_TIMESTAMP(),
@@ -161,9 +165,5 @@ set
         true
     ),
     ERROR_MESSAGE_OBJ = {% if ns.error_count > 0 %}parse_json('{"error_count":{{ ns.error_count }},"errors":{{ error_json }}}'){% else %}parse_json('null'){% endif %}
-where PROCESS_STEP_ID = '{{ process_step_id }}'
-and RECORD_TYPE = 'JOB';
-
-commit;
 
 {%- endmacro -%}
