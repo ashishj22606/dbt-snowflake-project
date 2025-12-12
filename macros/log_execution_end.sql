@@ -100,6 +100,9 @@
 {% endfor %}
 {% set sources_json = '{' ~ sources_json_parts | join(',') ~ '}' %}
 
+{{ log("sources_json_parts count: " ~ (sources_json_parts | length), info=true) }}
+{{ log("sources_json (first 500 chars): " ~ sources_json[:500], info=true) }}
+
 update {{ log_table }}
 set
     EXECUTION_STATUS_NAME = 'SUCCESS',
