@@ -107,17 +107,9 @@ set
         else ERROR_MESSAGE_OBJ
     end,
     STEP_EXECUTION_OBJ = case
-        when RECORD_TYPE = 'JOB' then object_insert(
-            object_insert(
-                STEP_EXECUTION_OBJ,
-                'current_step',
-                'JOB_COMPLETED'
-            ),
-            'job_status',
-            '{{ job_status }}'
-        )
+        when RECORD_TYPE = 'JOB' then object_construct('current_step', 'JOB_COMPLETED', 'job_status', '{{ job_status }}', 'total_models', {{ ns.total_count }}, 'successful_models', {{ ns.success_count }}, 'failed_models', {{ ns.error_count }})
         {% for m in failed_models %}
-        when RECORD_TYPE = 'MODEL' and MODEL_NAME = '{{ m.name }}' then object_insert(STEP_EXECUTION_OBJ, 'current_step', 'MODEL_FAILED')
+        when RECORD_TYPE = 'MODEL' and MODEL_NAME = '{{ m.name }}' then object_construct('current_step', 'MODEL_FAILED', 'status', 'FAILED')
         {% endfor %}
         else STEP_EXECUTION_OBJ
     end
