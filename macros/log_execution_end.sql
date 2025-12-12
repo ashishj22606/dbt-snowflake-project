@@ -31,20 +31,23 @@
             {{ log("Processing: " ~ node_id, info=true) }}
             {% set node_parts = node_id.split('.') %}
             {% set node_type = node_parts[0] %}
-            {{ log("  Type: " ~ node_type, info=true) }}
+            {{ log("  Type: " ~ node_type ~ ", Counter: " ~ source_counter, info=true) }}
+            {{ log("  Parts: " ~ node_parts, info=true) }}
             
             {% if node_type == 'source' %}
                 {% set source_name = node_parts[1] ~ '.' ~ node_parts[2] %}
                 {% set source_key = 'source_' ~ source_counter %}
+                {{ log("  Creating source_key: " ~ source_key ~ " for " ~ source_name, info=true) }}
                 {% do sources_dict.update({source_key: {'type': 'source', 'name': source_name, 'node_id': node_id}}) %}
-                {{ log("  Added SOURCE: " ~ source_name, info=true) }}
+                {{ log("  Added SOURCE: " ~ source_name ~ ", Dict size now: " ~ (sources_dict | length), info=true) }}
                 {% set source_counter = source_counter + 1 %}
                 
             {% elif node_type == 'model' %}
                 {% set ref_name = node_parts[2] %}
                 {% set source_key = 'source_' ~ source_counter %}
+                {{ log("  Creating source_key: " ~ source_key ~ " for " ~ ref_name, info=true) }}
                 {% do sources_dict.update({source_key: {'type': 'ref', 'name': ref_name, 'node_id': node_id}}) %}
-                {{ log("  Added REF: " ~ ref_name, info=true) }}
+                {{ log("  Added REF: " ~ ref_name ~ ", Dict size now: " ~ (sources_dict | length), info=true) }}
                 {% set source_counter = source_counter + 1 %}
                 
             {% elif node_type == 'seed' %}
