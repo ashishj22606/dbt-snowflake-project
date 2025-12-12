@@ -21,8 +21,16 @@
 
 {{ log("=== DEPENDENCY DEBUG for " ~ this.name ~ " ===", info=true) }}
 {{ log("Model unique_id: " ~ current_model_id, info=true) }}
-{{ log("Graph defined: " ~ (graph is defined), info=true) }}
-{{ log("Graph.nodes defined: " ~ (graph.nodes is defined if graph is defined else false), info=true) }}
+{% if graph is defined %}
+    {{ log("Graph: AVAILABLE", info=true) }}
+    {% if graph.nodes is defined %}
+        {{ log("Graph.nodes: AVAILABLE", info=true) }}
+    {% else %}
+        {{ log("Graph.nodes: NOT AVAILABLE", info=true) }}
+    {% endif %}
+{% else %}
+    {{ log("Graph: NOT AVAILABLE", info=true) }}
+{% endif %}
 
 {#- Try to get dependencies from the graph object (most reliable in hooks) -#}
 {% if graph is defined and graph.nodes is defined and current_model_id in graph.nodes %}
