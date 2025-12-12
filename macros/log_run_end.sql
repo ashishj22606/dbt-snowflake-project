@@ -79,65 +79,9 @@ set
         'total_models', {{ ns.total_count }},
         'successful_models', {{ ns.success_count }},
         'failed_models', {{ ns.error_count }},
-        'total_rows', (
-            select coalesce(sum(SOURCE_DATA_CNT), 0) 
-            from {{ log_table }} 
-            where PROCESS_STEP_ID = '{{ process_step_id }}' 
-            and RECORD_TYPE = 'MODEL'
-        )
+        'skipped_models', {{ ns.skip_count }}
     ),
-    STEP_EXECUTION_OBJ = object_insert(
-        object_insert(
-            object_insert(
-                STEP_EXECUTION_OBJ,
-                'current_step',
-                'JOB_COMPLETED'
-            ),
-            'job_status',
-            '{{ job_status }}'
-        ),
-        'execution_timeline',
-        array_append(
-            coalesce(STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]')),
-            object_construct(
-                'step_number', array_size(coalesce(STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]'))) + 1,
-                'timestamp', to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3'),
-                'level', '{% if ns.error_count > 0 %}Error{% else %}Info{% endif %}',
-                'step_type', 'JOB_COMPLETE',
-                'title', 'Job Completed: {{ job_status }}',
-                'query_id', null,
-                'query_result', object_construct(
-                    'total_models', {{ ns.total_count }},
-                    'successful_models', {{ ns.success_count }},
-                    'failed_models', {{ ns.error_count }},
-                    'skipped_models', {{ ns.skip_count }},
-                    'final_status', '{{ job_status }}'
-                ),
-                'content', object_construct(
-                    'job_status', '{{ job_status }}',
-                    'total_models', {{ ns.total_count }},
-                    'successful_models', {{ ns.success_count }},
-                    'failed_models', {{ ns.error_count }},
-                    'skipped_models', {{ ns.skip_count }},
-                    'models_summary', array_construct(
-                        {%- for m in ns.models_list %}
-                        object_construct('model_name', '{{ m.name }}', 'status', '{{ m.status }}', 'execution_time_seconds', {{ m.time }})
-                        {%- if not loop.last %},{% endif %}
-                        {%- endfor %}
-                    )
-                )
-            )
-        )
-    ),
-    ERROR_MESSAGE_OBJ = {% if ns.error_count > 0 %}object_construct(
-        'error_count', {{ ns.error_count }},
-        'errors', array_construct(
-            {%- for e in ns.error_list %}
-            object_construct('model_name', '{{ e.model }}', 'error_type', 'MODEL_EXECUTION_FAILED', 'error_message', '{{ e.error | replace("'", "''") }}', 'execution_time_seconds', {{ e.time }})
-            {%- if not loop.last %},{% endif %}
-            {%- endfor %}
-        )
-    ){% else %}null{% endif %}
+    ERROR_MESSAGE_OBJ = {% if ns.error_count > 0 %}object_construct('error_count', {{ ns.error_count }}, 'job_status', '{{ job_status }}'){% else %}null{% endif %}
 where PROCESS_STEP_ID = '{{ process_step_id }}'
   and RECORD_TYPE = 'JOB'
 
