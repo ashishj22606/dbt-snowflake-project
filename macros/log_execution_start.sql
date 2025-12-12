@@ -7,7 +7,8 @@
     Captures query ID and source dependencies for tracking.
 -#}
 
-{% set log_table = 'DEV_PROVIDERPDM.PROVIDERPDM_CORE_TARGET.PROCESS_EXECUTION_LOG' %}
+{% set snowflake_db = env_var('SNOWFLAKE_DATABASE', 'DEV_PROVIDERPDM') %}
+{% set log_table = snowflake_db ~ '.PROVIDERPDM_CORE_TARGET.PROCESS_EXECUTION_LOG' %}
 {% set model_name = this.name %}
 {% set run_id = invocation_id %}
 {% set process_step_id = 'JOB_' ~ run_id %}

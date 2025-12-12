@@ -6,7 +6,8 @@
     Individual models will create separate MODEL records with the same PROCESS_STEP_ID.
 -#}
 
-{% set log_table = 'DEV_PROVIDERPDM.PROVIDERPDM_CORE_TARGET.PROCESS_EXECUTION_LOG' %}
+{% set snowflake_db = env_var('SNOWFLAKE_DATABASE', 'DEV_PROVIDERPDM') %}
+{% set log_table = snowflake_db ~ '.PROVIDERPDM_CORE_TARGET.PROCESS_EXECUTION_LOG' %}
 {% set run_id = invocation_id %}
 {% set process_step_id = 'JOB_' ~ run_id %}
 
