@@ -105,6 +105,21 @@ set
         when RECORD_TYPE = 'MODEL' and MODEL_NAME = '{{ m.name }}' then object_construct('error_type', 'MODEL_EXECUTION_FAILED', 'error_message', '{{ m.error }}', 'status', 'FAILED')
         {% endfor %}
         else ERROR_MESSAGE_OBJ
+    end,
+    STEP_EXECUTION_OBJ = case
+        when RECORD_TYPE = 'JOB' then object_insert(
+            object_insert(
+                STEP_EXECUTION_OBJ,
+                'current_step',
+                'JOB_COMPLETED'
+            ),
+            'job_status',
+            '{{ job_status }}'
+        )
+        {% for m in failed_models %}
+        when RECORD_TYPE = 'MODEL' and MODEL_NAME = '{{ m.name }}' then object_insert(STEP_EXECUTION_OBJ, 'current_step', 'MODEL_FAILED')
+        {% endfor %}
+        else STEP_EXECUTION_OBJ
     end
 where PROCESS_STEP_ID = '{{ process_step_id }}'
   and (RECORD_TYPE = 'JOB' {% if failed_models | length > 0 %}or (RECORD_TYPE = 'MODEL' and MODEL_NAME in ({% for m in failed_models %}'{{ m.name }}'{% if not loop.last %},{% endif %}{% endfor %})){% endif %})
