@@ -109,9 +109,9 @@ set
         ),
         'execution_timeline',
         array_append(
-            coalesce(STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]', 'd')),
+            coalesce(STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]')),
             object_construct(
-                'step_number', array_size(coalesce(STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]', 'd'))) + 1,
+                'step_number', array_size(coalesce(STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]'))) + 1,
                 'timestamp', to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3'),
                 'level', '{% if ns.error_count > 0 %}Error{% else %}Info{% endif %}',
                 'step_type', 'JOB_COMPLETE',
@@ -130,12 +130,12 @@ set
                     'successful_models', {{ ns.success_count }},
                     'failed_models', {{ ns.error_count }},
                     'skipped_models', {{ ns.skip_count }},
-                    'models_summary', parse_json('{{ models_json }}', 'd')
+                    'models_summary', parse_json('{{ models_json }}')
                 )
             )
         )
     ),
-    ERROR_MESSAGE_OBJ = {% if ns.error_count > 0 %}parse_json('{"error_count":{{ ns.error_count }},"errors":{{ error_json }}}', 'd'){% else %}null{% endif %}
+    ERROR_MESSAGE_OBJ = {% if ns.error_count > 0 %}parse_json('{"error_count":{{ ns.error_count }},"errors":{{ error_json }}}'){% else %}null{% endif %}
 where PROCESS_STEP_ID = '{{ process_step_id }}'
   and RECORD_TYPE = 'JOB'
 
