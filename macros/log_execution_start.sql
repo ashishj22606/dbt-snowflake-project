@@ -1,15 +1,16 @@
 {%- macro log_execution_start() -%}
 
 {#- 
-    This macro UPDATES the single job record when a model STARTS executing.
-    Appends model to array with config details and adds timeline event.
+    This macro INSERTS a new MODEL record when a model STARTS executing.
+    Each model gets its own record with RECORD_TYPE='MODEL'.
     Captures query ID and source dependencies for tracking.
 -#}
 
 {% set log_table = 'DEV_PROVIDERPDM.PROVIDERPDM_CORE_TARGET.PROCESS_EXECUTION_LOG' %}
 {% set model_name = this.name %}
 {% set run_id = invocation_id %}
-{% set process_step_id = 'JOB_' ~ run_id %}
+{% set parent_step_id = 'JOB_' ~ run_id %}
+{% set process_step_id = 'JOB_' ~ run_id ~ '_MODEL_' ~ model_name %}
 
 {#- Build source dependencies object -#}
 {% set sources_dict = {} %}
@@ -60,92 +61,75 @@
     {% set execution_type = 'FULL_LOAD' %}
 {% endif %}
 
-merge into {{ log_table }} as target
-using (
-    select 
-        '{{ process_step_id }}' as process_step_id,
-        array_append(
-            coalesce(STEP_EXECUTION_OBJ:models, parse_json('[]')),
-            object_construct(
-                'model_name', '{{ model_name }}',
-                'database', '{{ this.database }}',
-                'schema', '{{ this.schema }}',
-                'alias', '{{ this.identifier }}',
-                'materialization', '{{ materialization }}',
-                'execution_type', '{{ execution_type }}',
-                'status', 'RUNNING',
-                'start_time', to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3'),
-                'end_time', null,
-                'duration_seconds', null,
-                'query_id_start', LAST_QUERY_ID(),
-                'query_id_end', null,
-                'rows_affected', null,
-                'lineage_steps', parse_json('[]')
-            )
-        ) as new_models_array,
-        array_append(
-            coalesce(STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]')),
-            object_construct(
-                'step_number', array_size(coalesce(STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]'))) + 1,
-                'timestamp', to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3'),
-                'level', 'Info',
-                'step_type', 'MODEL_START',
-                'title', 'Model Started: {{ model_name }}',
-                'query_id', LAST_QUERY_ID(),
-                'content', object_construct(
-                    'model', '{{ model_name }}', 
-                    'materialization', '{{ materialization }}',
-                    'execution_type', '{{ execution_type }}',
-                    'database', '{{ this.database }}',
-                    'schema', '{{ this.schema }}',
-                    'table', '{{ this.identifier }}'
-                )
-            )
-        ) as new_timeline,
-        object_insert(
-            coalesce(base.SOURCE_OBJ, parse_json('{}')),
-            '{{ model_name }}',
-            parse_json('{{ sources_json }}'),
-            true
-        ) as new_source_obj,
-        object_insert(
-            coalesce(base.DESTINATION_OBJ, parse_json('{}')),
-            '{{ model_name }}',
-            object_construct(
-                'database', '{{ this.database }}',
-                'schema', '{{ this.schema }}',
-                'table', '{{ this.identifier }}',
-                'materialization', '{{ materialization }}',
-                'execution_type', '{{ execution_type }}',
-                'full_name', '{{ this.database }}.{{ this.schema }}.{{ this.identifier }}'
-            ),
-            true
-        ) as new_dest_obj
-    from {{ log_table }} base
-    where base.PROCESS_STEP_ID = '{{ process_step_id }}'
-) as source
-on target.PROCESS_STEP_ID = source.process_step_id
-when matched then update set
-    target.UPDATE_TMSTP = current_timestamp(),
-    target.EXECUTION_STATUS_NAME = 'RUNNING',
-    target.EXECUTION_TYPE_NAME = '{{ execution_type }}',
-    target.SOURCE_OBJ = source.new_source_obj,
-    target.DESTINATION_OBJ = source.new_dest_obj,
-    target.STEP_EXECUTION_OBJ = object_insert(
-        object_insert(
-            object_insert(
-                target.STEP_EXECUTION_OBJ,
-                'models',
-                source.new_models_array,
-                true
-            ),
-            'execution_timeline',
-            source.new_timeline,
-            true
-        ),
-        'current_step',
-        'RUNNING: {{ model_name }}',
-        true
-    )
+insert into {{ log_table }} (
+    PROCESS_CONFIG_SK,
+    PROCESS_STEP_ID,
+    PARENT_STEP_ID,
+    RECORD_TYPE,
+    EXECUTION_STATUS_NAME,
+    EXECUTION_COMPLETED_IND,
+    EXECUTION_START_TMSTP,
+    EXECUTION_END_TMSTP,
+    SOURCE_OBJ,
+    DESTINATION_OBJ,
+    PROCESS_CONFIG_OBJ,
+    SOURCE_DATA_CNT,
+    DESTINATION_DATA_CNT_OBJ,
+    EXECUTION_TYPE_NAME,
+    EXTRACT_START_TMSTP,
+    EXTRACT_END_TMSTP,
+    ERROR_MESSAGE_OBJ,
+    STEP_EXECUTION_OBJ,
+    INSERT_TMSTP,
+    UPDATE_TMSTP,
+    DELETED_IND
+)
+select
+    null as PROCESS_CONFIG_SK,
+    '{{ process_step_id }}' as PROCESS_STEP_ID,
+    '{{ parent_step_id }}' as PARENT_STEP_ID,
+    'MODEL' as RECORD_TYPE,
+    'RUNNING' as EXECUTION_STATUS_NAME,
+    'N' as EXECUTION_COMPLETED_IND,
+    CURRENT_TIMESTAMP() as EXECUTION_START_TMSTP,
+    null::TIMESTAMP_NTZ as EXECUTION_END_TMSTP,
+    parse_json('{{ sources_json }}') as SOURCE_OBJ,
+    object_construct(
+        'database', '{{ this.database }}',
+        'schema', '{{ this.schema }}',
+        'table', '{{ this.identifier }}',
+        'materialization', '{{ materialization }}',
+        'execution_type', '{{ execution_type }}',
+        'full_name', '{{ this.database }}.{{ this.schema }}.{{ this.identifier }}'
+    ) as DESTINATION_OBJ,
+    object_construct(
+        'model_name', '{{ model_name }}',
+        'materialization', '{{ materialization }}',
+        'execution_type', '{{ execution_type }}'
+    ) as PROCESS_CONFIG_OBJ,
+    0 as SOURCE_DATA_CNT,
+    parse_json('null') as DESTINATION_DATA_CNT_OBJ,
+    '{{ execution_type }}' as EXECUTION_TYPE_NAME,
+    CURRENT_TIMESTAMP() as EXTRACT_START_TMSTP,
+    null::TIMESTAMP_NTZ as EXTRACT_END_TMSTP,
+    parse_json('null') as ERROR_MESSAGE_OBJ,
+    object_construct(
+        'model_name', '{{ model_name }}',
+        'current_step', 'MODEL_STARTED',
+        'query_id_start', LAST_QUERY_ID(),
+        'query_id_end', null,
+        'execution_timeline', parse_json('[' ||
+            '{"step_number":1,' ||
+            '"timestamp":"' || to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3') || '",' ||
+            '"level":"Info",' ||
+            '"step_type":"MODEL_START",' ||
+            '"title":"Model Started: {{ model_name }}",' ||
+            '"query_id":"' || LAST_QUERY_ID() || '",' ||
+            '"content":{"model":"{{ model_name }}","materialization":"{{ materialization }}","execution_type":"{{ execution_type }}","database":"{{ this.database }}","schema":"{{ this.schema }}","table":"{{ this.identifier }}"}}' ||
+            ']')
+    ) as STEP_EXECUTION_OBJ,
+    CURRENT_TIMESTAMP() as INSERT_TMSTP,
+    CURRENT_TIMESTAMP() as UPDATE_TMSTP,
+    'N' as DELETED_IND
 
 {%- endmacro -%}

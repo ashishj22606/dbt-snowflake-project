@@ -1,9 +1,9 @@
 {%- macro log_run_end() -%}
 
 {#- 
-    This macro updates the SINGLE record in PROCESS_EXECUTION_LOG when a dbt run ends.
+    This macro updates the JOB record in PROCESS_EXECUTION_LOG when a dbt run ends.
     It uses dbt's 'results' variable to capture ALL model results including failures.
-    Adds final timeline event and enhanced error details.
+    Adds final timeline event and enhanced error details to the JOB record.
     
     IMPORTANT: Only ONE SQL statement allowed in hooks.
 -#}
@@ -73,50 +73,47 @@
 {% endfor %}
 {% set error_json = '[' ~ error_json_parts | join(',') ~ ']' %}
 
-merge into {{ log_table }} as target
-using (
-    select 
-        '{{ process_step_id }}' as process_step_id,
-        parse_json('{{ models_json }}') as final_models_summary,
-        base.STEP_EXECUTION_OBJ as current_step_obj,
-        base.STEP_EXECUTION_OBJ:execution_timeline as current_timeline
-    from {{ log_table }} base
-    where base.PROCESS_STEP_ID = '{{ process_step_id }}'
-) as source
-on target.PROCESS_STEP_ID = source.process_step_id
-when matched then update set
-    target.EXECUTION_STATUS_NAME = '{{ job_status }}',
-    target.EXECUTION_COMPLETED_IND = 'Y',
-    target.EXECUTION_END_TMSTP = CURRENT_TIMESTAMP(),
-    target.EXTRACT_END_TMSTP = CURRENT_TIMESTAMP(),
-    target.UPDATE_TMSTP = CURRENT_TIMESTAMP(),
-    target.STEP_EXECUTION_OBJ = object_insert(
+update {{ log_table }}
+set
+    EXECUTION_STATUS_NAME = '{{ job_status }}',
+    EXECUTION_COMPLETED_IND = 'Y',
+    EXECUTION_END_TMSTP = CURRENT_TIMESTAMP(),
+    EXTRACT_END_TMSTP = CURRENT_TIMESTAMP(),
+    UPDATE_TMSTP = CURRENT_TIMESTAMP(),
+    SOURCE_DATA_CNT = (
+        select coalesce(sum(SOURCE_DATA_CNT), 0) 
+        from {{ log_table }} 
+        where PARENT_STEP_ID = '{{ process_step_id }}' 
+        and RECORD_TYPE = 'MODEL'
+    ),
+    DESTINATION_DATA_CNT_OBJ = object_construct(
+        'total_models', {{ ns.total_count }},
+        'successful_models', {{ ns.success_count }},
+        'failed_models', {{ ns.error_count }},
+        'total_rows', (
+            select coalesce(sum(SOURCE_DATA_CNT), 0) 
+            from {{ log_table }} 
+            where PARENT_STEP_ID = '{{ process_step_id }}' 
+            and RECORD_TYPE = 'MODEL'
+        )
+    ),
+    STEP_EXECUTION_OBJ = object_insert(
         object_insert(
             object_insert(
-                object_insert(
-                    coalesce(source.current_step_obj, parse_json('{}')),
-                    'current_step',
-                    'JOB_COMPLETED',
-                    true
-                ),
-                'job_status',
-                '{{ job_status }}',
+                STEP_EXECUTION_OBJ,
+                'current_step',
+                'JOB_COMPLETED',
                 true
             ),
-            'summary',
-            object_construct(
-                'total', {{ ns.total_count }},
-                'success', {{ ns.success_count }},
-                'error', {{ ns.error_count }},
-                'skipped', {{ ns.skip_count }}
-            ),
+            'job_status',
+            '{{ job_status }}',
             true
         ),
         'execution_timeline',
         array_append(
-            coalesce(source.current_timeline, parse_json('[]')),
+            coalesce(STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]')),
             object_construct(
-                'step_number', array_size(coalesce(source.current_timeline, parse_json('[]'))) + 1,
+                'step_number', array_size(coalesce(STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]'))) + 1,
                 'timestamp', to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3'),
                 'level', '{% if ns.error_count > 0 %}Error{% else %}Info{% endif %}',
                 'step_type', 'JOB_COMPLETE',
@@ -134,12 +131,15 @@ when matched then update set
                     'total_models', {{ ns.total_count }},
                     'successful_models', {{ ns.success_count }},
                     'failed_models', {{ ns.error_count }},
-                    'skipped_models', {{ ns.skip_count }}
+                    'skipped_models', {{ ns.skip_count }},
+                    'models_summary', parse_json('{{ models_json }}')
                 )
             )
         ),
         true
     ),
-    target.ERROR_MESSAGE_OBJ = {% if ns.error_count > 0 %}parse_json('{"error_count":{{ ns.error_count }},"errors":{{ error_json }}}'){% else %}parse_json('null'){% endif %}
+    ERROR_MESSAGE_OBJ = {% if ns.error_count > 0 %}parse_json('{"error_count":{{ ns.error_count }},"errors":{{ error_json }}}'){% else %}parse_json('null'){% endif %}
+where PROCESS_STEP_ID = '{{ process_step_id }}'
+and RECORD_TYPE = 'JOB'
 
 {%- endmacro -%}
