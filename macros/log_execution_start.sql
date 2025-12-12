@@ -2,15 +2,15 @@
 
 {#- 
     This macro INSERTS a new MODEL record when a model STARTS executing.
-    Each model gets its own record with RECORD_TYPE='MODEL'.
+    Each model gets its own record with RECORD_TYPE='MODEL' and the same PROCESS_STEP_ID as the job.
+    MODEL_NAME identifies the specific model within the job.
     Captures query ID and source dependencies for tracking.
 -#}
 
 {% set log_table = 'DEV_PROVIDERPDM.PROVIDERPDM_CORE_TARGET.PROCESS_EXECUTION_LOG' %}
 {% set model_name = this.name %}
 {% set run_id = invocation_id %}
-{% set parent_step_id = 'JOB_' ~ run_id %}
-{% set process_step_id = 'JOB_' ~ run_id ~ '_MODEL_' ~ model_name %}
+{% set process_step_id = 'JOB_' ~ run_id %}
 
 {#- Build source dependencies object -#}
 {% set sources_dict = {} %}
@@ -64,8 +64,8 @@
 insert into {{ log_table }} (
     PROCESS_CONFIG_SK,
     PROCESS_STEP_ID,
-    PARENT_STEP_ID,
     RECORD_TYPE,
+    MODEL_NAME,
     EXECUTION_STATUS_NAME,
     EXECUTION_COMPLETED_IND,
     EXECUTION_START_TMSTP,
@@ -87,8 +87,8 @@ insert into {{ log_table }} (
 select
     null as PROCESS_CONFIG_SK,
     '{{ process_step_id }}' as PROCESS_STEP_ID,
-    '{{ parent_step_id }}' as PARENT_STEP_ID,
     'MODEL' as RECORD_TYPE,
+    '{{ model_name }}' as MODEL_NAME,
     'RUNNING' as EXECUTION_STATUS_NAME,
     'N' as EXECUTION_COMPLETED_IND,
     CURRENT_TIMESTAMP() as EXECUTION_START_TMSTP,

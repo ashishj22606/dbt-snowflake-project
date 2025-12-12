@@ -83,7 +83,7 @@ set
     SOURCE_DATA_CNT = (
         select coalesce(sum(SOURCE_DATA_CNT), 0) 
         from {{ log_table }} 
-        where PARENT_STEP_ID = '{{ process_step_id }}' 
+        where PROCESS_STEP_ID = '{{ process_step_id }}' 
         and RECORD_TYPE = 'MODEL'
     ),
     DESTINATION_DATA_CNT_OBJ = object_construct(
@@ -93,7 +93,7 @@ set
         'total_rows', (
             select coalesce(sum(SOURCE_DATA_CNT), 0) 
             from {{ log_table }} 
-            where PARENT_STEP_ID = '{{ process_step_id }}' 
+            where PROCESS_STEP_ID = '{{ process_step_id }}' 
             and RECORD_TYPE = 'MODEL'
         )
     ),

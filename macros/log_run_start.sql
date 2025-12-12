@@ -3,7 +3,7 @@
 {#- 
     This macro inserts a JOB-level record into PROCESS_EXECUTION_LOG when a dbt run starts.
     RECORD_TYPE = 'JOB' for job-level tracking.
-    Individual models will create separate MODEL records.
+    Individual models will create separate MODEL records with the same PROCESS_STEP_ID.
 -#}
 
 {% set log_table = 'DEV_PROVIDERPDM.PROVIDERPDM_CORE_TARGET.PROCESS_EXECUTION_LOG' %}
@@ -13,8 +13,8 @@
 insert into {{ log_table }} (
     PROCESS_CONFIG_SK,
     PROCESS_STEP_ID,
-    PARENT_STEP_ID,
     RECORD_TYPE,
+    MODEL_NAME,
     EXECUTION_STATUS_NAME,
     EXECUTION_COMPLETED_IND,
     EXECUTION_START_TMSTP,
@@ -36,8 +36,8 @@ insert into {{ log_table }} (
 select
     null as PROCESS_CONFIG_SK,
     '{{ process_step_id }}' as PROCESS_STEP_ID,
-    null as PARENT_STEP_ID,
     'JOB' as RECORD_TYPE,
+    null as MODEL_NAME,
     'RUNNING' as EXECUTION_STATUS_NAME,
     'N' as EXECUTION_COMPLETED_IND,
     CURRENT_TIMESTAMP() as EXECUTION_START_TMSTP,

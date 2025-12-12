@@ -1,9 +1,10 @@
-# Multi-Record Logging Structure (Hierarchical)
+# Multi-Record Logging Structure (Simplified)
 
 ## Overview
-The logging system has been updated from a **single-record-per-job** approach to a **multi-record hierarchical** approach, where:
+The logging system has been updated from a **single-record-per-job** approach to a **multi-record simplified** approach, where:
 - **1 JOB record** per dbt run
 - **N MODEL records** per dbt run (one for each model executed)
+- **All records share the same PROCESS_STEP_ID** (the job ID)
 
 This makes it much easier to query and analyze individual model executions while maintaining job-level context.
 
@@ -16,15 +17,19 @@ Add these columns to `PROCESS_EXECUTION_LOG` table:
 
 ```sql
 ALTER TABLE PROCESS_EXECUTION_LOG 
-ADD COLUMN PARENT_STEP_ID VARCHAR(500);
+ADD COLUMN RECORD_TYPE VARCHAR(50);
 
 ALTER TABLE PROCESS_EXECUTION_LOG 
-ADD COLUMN RECORD_TYPE VARCHAR(50);
+ADD COLUMN MODEL_NAME VARCHAR(500);
 ```
 
 ### Column Definitions
-- **PARENT_STEP_ID**: For MODEL records, contains the JOB's PROCESS_STEP_ID. For JOB records, is NULL.
+- **PROCESS_STEP_ID**: Same for all records in a job run (format: `JOB_<invocation_id>`)
 - **RECORD_TYPE**: Either 'JOB' or 'MODEL'
+- **MODEL_NAME**: NULL for JOB records, model name for MODEL records
+
+### Primary Key
+Composite key: `(PROCESS_STEP_ID, RECORD_TYPE, MODEL_NAME)`
 
 ---
 
@@ -32,8 +37,8 @@ ADD COLUMN RECORD_TYPE VARCHAR(50);
 
 ### JOB Record
 **PROCESS_STEP_ID**: `JOB_<invocation_id>`  
-**PARENT_STEP_ID**: `NULL`  
-**RECORD_TYPE**: `JOB`
+**RECORD_TYPE**: `JOB`  
+**MODEL_NAME**: `NULL`
 
 **Contains:**
 - Job-level metadata (target, warehouse, threads, dbt version)
@@ -54,9 +59,9 @@ ADD COLUMN RECORD_TYPE VARCHAR(50);
 ---
 
 ### MODEL Records
-**PROCESS_STEP_ID**: `JOB_<invocation_id>_MODEL_<model_name>`  
-**PARENT_STEP_ID**: `JOB_<invocation_id>`  
-**RECORD_TYPE**: `MODEL`
+**PROCESS_STEP_ID**: `JOB_<invocation_id>` (same as JOB record)  
+**RECORD_TYPE**: `MODEL`  
+**MODEL_NAME**: `<model_name>` (e.g., 'stg_customers')
 
 **Contains (per model):**
 - Model-specific source dependencies
@@ -129,23 +134,25 @@ ADD COLUMN RECORD_TYPE VARCHAR(50);
 
 ### 1. `log_run_start` (on-run-start hook)
 - **Action**: INSERT 1 JOB record
-- **Sets**: RECORD_TYPE='JOB', PARENT_STEP_ID=NULL
+- **Sets**: PROCESS_STEP_ID='JOB_xxx', RECORD_TYPE='JOB', MODEL_NAME=NULL
 - **Initializes**: Job-level config, empty timeline
 
 ### 2. `log_execution_start` (pre-hook on each model)
 - **Action**: INSERT 1 MODEL record per model
-- **Sets**: RECORD_TYPE='MODEL', PARENT_STEP_ID=JOB_ID
+- **Sets**: PROCESS_STEP_ID='JOB_xxx' (same as job), RECORD_TYPE='MODEL', MODEL_NAME='model_name'
 - **Captures**: Source dependencies, destination details, start time, query ID
 - **Timeline**: Adds MODEL_START event
 
 ### 3. `log_execution_end` (post-hook on each model)
 - **Action**: UPDATE the specific MODEL record
+- **WHERE**: PROCESS_STEP_ID='JOB_xxx' AND RECORD_TYPE='MODEL' AND MODEL_NAME='model_name'
 - **Updates**: End time, status=SUCCESS, row count, end query ID
 - **Timeline**: Adds MODEL_COMPLETE event with query results
 
 ### 4. `log_run_end` (on-run-end hook)
 - **Action**: UPDATE the JOB record
-- **Aggregates**: Total counts from all MODEL records
+- **WHERE**: PROCESS_STEP_ID='JOB_xxx' AND RECORD_TYPE='JOB'
+- **Aggregates**: Total counts from all MODEL records (WHERE PROCESS_STEP_ID='JOB_xxx' AND RECORD_TYPE='MODEL')
 - **Summarizes**: Success/failure counts, total rows
 - **Timeline**: Adds JOB_COMPLETE event
 
@@ -153,21 +160,37 @@ ADD COLUMN RECORD_TYPE VARCHAR(50);
 
 ## Query Examples
 
+### Get all records for a specific job (both JOB and MODEL records)
+```sql
+SELECT 
+    PROCESS_STEP_ID,
+    RECORD_TYPE,
+    MODEL_NAME,
+    EXECUTION_STATUS_NAME,
+    EXECUTION_TYPE_NAME,
+    EXECUTION_START_TMSTP,
+    EXECUTION_END_TMSTP,
+    SOURCE_DATA_CNT as row_count
+FROM PROCESS_EXECUTION_LOG
+WHERE PROCESS_STEP_ID = 'JOB_abc123...'
+ORDER BY RECORD_TYPE DESC, EXECUTION_START_TMSTP;  -- JOB first, then MODELs
+```
+
 ### Get all models for a specific job
 ```sql
 SELECT 
     PROCESS_STEP_ID,
+    MODEL_NAME,
     EXECUTION_STATUS_NAME,
     EXECUTION_TYPE_NAME,
     EXECUTION_START_TMSTP,
     EXECUTION_END_TMSTP,
     SOURCE_DATA_CNT as row_count,
-    STEP_EXECUTION_OBJ:model_name::string as model_name,
     DESTINATION_OBJ:database::string as database,
     DESTINATION_OBJ:schema::string as schema,
     DESTINATION_OBJ:table::string as table
 FROM PROCESS_EXECUTION_LOG
-WHERE PARENT_STEP_ID = 'JOB_abc123...'
+WHERE PROCESS_STEP_ID = 'JOB_abc123...'
   AND RECORD_TYPE = 'MODEL'
 ORDER BY EXECUTION_START_TMSTP;
 ```
@@ -193,22 +216,22 @@ WHERE PROCESS_STEP_ID = 'JOB_abc123...'
 ```sql
 SELECT 
     m.PROCESS_STEP_ID,
-    m.STEP_EXECUTION_OBJ:model_name::string as model_name,
+    m.MODEL_NAME,
     f.value:type::string as source_type,
     f.value:name::string as source_name,
     f.value:node_id::string as node_id
 FROM PROCESS_EXECUTION_LOG m,
      LATERAL FLATTEN(input => m.SOURCE_OBJ) f
-WHERE m.PARENT_STEP_ID = 'JOB_abc123...'
+WHERE m.PROCESS_STEP_ID = 'JOB_abc123...'
   AND m.RECORD_TYPE = 'MODEL'
-  AND m.STEP_EXECUTION_OBJ:model_name::string = 'stg_customers';
+  AND m.MODEL_NAME = 'stg_customers';
 ```
 
 ### Get execution timeline for a model
 ```sql
 SELECT 
     PROCESS_STEP_ID,
-    STEP_EXECUTION_OBJ:model_name::string as model_name,
+    MODEL_NAME,
     t.value:step_number::int as step_number,
     t.value:timestamp::string as timestamp,
     t.value:step_type::string as step_type,
@@ -217,17 +240,17 @@ SELECT
     t.value:query_result as query_result
 FROM PROCESS_EXECUTION_LOG m,
      LATERAL FLATTEN(input => m.STEP_EXECUTION_OBJ:execution_timeline) t
-WHERE m.PARENT_STEP_ID = 'JOB_abc123...'
+WHERE m.PROCESS_STEP_ID = 'JOB_abc123...'
   AND m.RECORD_TYPE = 'MODEL'
-  AND m.STEP_EXECUTION_OBJ:model_name::string = 'stg_customers'
+  AND m.MODEL_NAME = 'stg_customers'
 ORDER BY t.value:step_number::int;
 ```
 
 ### Get all failed models across all jobs
 ```sql
 SELECT 
-    PARENT_STEP_ID as job_id,
-    STEP_EXECUTION_OBJ:model_name::string as model_name,
+    PROCESS_STEP_ID as job_id,
+    MODEL_NAME,
     EXECUTION_START_TMSTP,
     EXECUTION_END_TMSTP,
     DESTINATION_OBJ:full_name::string as table_name,
@@ -238,7 +261,7 @@ WHERE RECORD_TYPE = 'MODEL'
 ORDER BY EXECUTION_START_TMSTP DESC;
 ```
 
-### Get job and all its models (hierarchical view)
+### Get job and all its models (unified view)
 ```sql
 WITH job AS (
     SELECT * 
@@ -249,7 +272,7 @@ WITH job AS (
 models AS (
     SELECT * 
     FROM PROCESS_EXECUTION_LOG 
-    WHERE PARENT_STEP_ID = 'JOB_abc123...' 
+    WHERE PROCESS_STEP_ID = 'JOB_abc123...' 
       AND RECORD_TYPE = 'MODEL'
 )
 SELECT 
@@ -257,8 +280,7 @@ SELECT
     j.EXECUTION_STATUS_NAME as job_status,
     j.EXECUTION_START_TMSTP as job_start,
     j.EXECUTION_END_TMSTP as job_end,
-    m.PROCESS_STEP_ID as model_id,
-    m.STEP_EXECUTION_OBJ:model_name::string as model_name,
+    m.MODEL_NAME,
     m.EXECUTION_STATUS_NAME as model_status,
     m.SOURCE_DATA_CNT as model_row_count,
     m.EXECUTION_TYPE_NAME as execution_type
@@ -267,24 +289,46 @@ LEFT JOIN models m ON 1=1
 ORDER BY m.EXECUTION_START_TMSTP;
 ```
 
+### Simple query to get everything for a job
+```sql
+-- This is the beauty of same PROCESS_STEP_ID!
+SELECT 
+    PROCESS_STEP_ID,
+    RECORD_TYPE,
+    MODEL_NAME,
+    EXECUTION_STATUS_NAME,
+    EXECUTION_START_TMSTP,
+    EXECUTION_END_TMSTP,
+    SOURCE_DATA_CNT,
+    EXECUTION_TYPE_NAME
+FROM PROCESS_EXECUTION_LOG
+WHERE PROCESS_STEP_ID = 'JOB_abc123...'
+ORDER BY 
+    CASE WHEN RECORD_TYPE = 'JOB' THEN 0 ELSE 1 END,  -- JOB first
+    EXECUTION_START_TMSTP;
+```
+
 ---
 
 ## Benefits
 
 ### ✅ Easier Querying
-- No need to flatten complex JSON arrays for basic queries
-- Direct column access for model-level data
-- Simple WHERE clauses to filter by model or job
+- **Single WHERE clause** to get all job data: `WHERE PROCESS_STEP_ID = 'JOB_xxx'`
+- Direct column access for model-level data with MODEL_NAME
+- Simple filtering: add `AND RECORD_TYPE = 'MODEL'` or `AND RECORD_TYPE = 'JOB'`
+- No need to remember complex PROCESS_STEP_ID patterns
 
 ### ✅ Better Performance
-- Indexes can be created on PARENT_STEP_ID for fast joins
+- Natural grouping by PROCESS_STEP_ID for partition pruning
+- Can create index on (PROCESS_STEP_ID, RECORD_TYPE, MODEL_NAME)
 - No JSON parsing required for common queries
 - Smaller individual records
 
-### ✅ Clearer Separation
-- Job-level vs Model-level data clearly separated
-- Each record has focused, relevant information
-- Easier to understand table structure
+### ✅ Clearer Semantics
+- PROCESS_STEP_ID truly represents the "job run"
+- RECORD_TYPE differentiates job summary vs model details
+- MODEL_NAME is a direct column (not buried in JSON)
+- Intuitive structure: all records with same ID belong together
 
 ### ✅ Maintained Lineage
 - Full query ID tracking per model
@@ -293,9 +337,10 @@ ORDER BY m.EXECUTION_START_TMSTP;
 - Row counts tracked per model
 
 ### ✅ Flexible Analysis
-- Can analyze at job level (summary)
-- Can analyze at model level (details)
-- Can join job and model records for full context
+- Get everything: `WHERE PROCESS_STEP_ID = 'JOB_xxx'`
+- Get job summary: add `AND RECORD_TYPE = 'JOB'`
+- Get all models: add `AND RECORD_TYPE = 'MODEL'`
+- Get specific model: add `AND MODEL_NAME = 'xyz'`
 - Easy to aggregate across multiple jobs
 
 ---
@@ -303,14 +348,47 @@ ORDER BY m.EXECUTION_START_TMSTP;
 ## Migration Notes
 
 If you have existing data in the old single-record format:
-1. Add the new columns (PARENT_STEP_ID, RECORD_TYPE)
-2. Update existing records: SET RECORD_TYPE='JOB', PARENT_STEP_ID=NULL
+1. Add the new columns (RECORD_TYPE, MODEL_NAME)
+2. Update existing records: SET RECORD_TYPE='JOB', MODEL_NAME=NULL
 3. The new macros will create the new structure going forward
 4. Old records remain queryable as JOB records (without MODEL detail records)
 
+### Required DDL
+```sql
+ALTER TABLE DEV_PROVIDERPDM.PROVIDERPDM_CORE_TARGET.PROCESS_EXECUTION_LOG 
+ADD COLUMN RECORD_TYPE VARCHAR(50);
 
 ALTER TABLE DEV_PROVIDERPDM.PROVIDERPDM_CORE_TARGET.PROCESS_EXECUTION_LOG 
+ADD COLUMN MODEL_NAME VARCHAR(500);
+
+-- Update existing records
+UPDATE DEV_PROVIDERPDM.PROVIDERPDM_CORE_TARGET.PROCESS_EXECUTION_LOG
+SET RECORD_TYPE = 'JOB',
+    MODEL_NAME = NULL
+WHERE RECORD_TYPE IS NULL;
+```
+
+### Recommended Index
+```sql
+CREATE INDEX idx_process_execution_log_lookup 
+ON DEV_PROVIDERPDM.PROVIDERPDM_CORE_TARGET.PROCESS_EXECUTION_LOG 
+(PROCESS_STEP_ID, RECORD_TYPE, MODEL_NAME);
+```
+ 
 ADD COLUMN PARENT_STEP_ID VARCHAR(500);
 
 ALTER TABLE DEV_PROVIDERPDM.PROVIDERPDM_CORE_TARGET.PROCESS_EXECUTION_LOG 
 ADD COLUMN RECORD_TYPE VARCHAR(50);
+
+
+-- Add new columns
+ALTER TABLE DEV_PROVIDERPDM.PROVIDERPDM_CORE_TARGET.PROCESS_EXECUTION_LOG 
+ADD COLUMN RECORD_TYPE VARCHAR(50);
+
+ALTER TABLE DEV_PROVIDERPDM.PROVIDERPDM_CORE_TARGET.PROCESS_EXECUTION_LOG 
+ADD COLUMN MODEL_NAME VARCHAR(500);
+
+-- Recommended index
+CREATE INDEX idx_process_execution_log_lookup 
+ON DEV_PROVIDERPDM.PROVIDERPDM_CORE_TARGET.PROCESS_EXECUTION_LOG 
+(PROCESS_STEP_ID, RECORD_TYPE, MODEL_NAME);

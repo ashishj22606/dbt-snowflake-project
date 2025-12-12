@@ -9,8 +9,7 @@
 {% set log_table = 'DEV_PROVIDERPDM.PROVIDERPDM_CORE_TARGET.PROCESS_EXECUTION_LOG' %}
 {% set model_name = this.name %}
 {% set run_id = invocation_id %}
-{% set parent_step_id = 'JOB_' ~ run_id %}
-{% set process_step_id = 'JOB_' ~ run_id ~ '_MODEL_' ~ model_name %}
+{% set process_step_id = 'JOB_' ~ run_id %}
 
 update {{ log_table }}
 set
@@ -58,5 +57,7 @@ set
         true
     )
 where PROCESS_STEP_ID = '{{ process_step_id }}'
+  and RECORD_TYPE = 'MODEL'
+  and MODEL_NAME = '{{ model_name }}'
 
 {%- endmacro -%}
