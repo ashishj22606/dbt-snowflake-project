@@ -73,6 +73,43 @@
 {% endfor %}
 {% set error_json = '[' ~ error_json_parts | join(',') ~ ']' %}
 
+begin;
+
+-- Update any MODEL records still in RUNNING state to FAILED
+update {{ log_table }}
+set
+    EXECUTION_STATUS_NAME = 'FAILED',
+    EXECUTION_COMPLETED_IND = 'Y',
+    EXECUTION_END_TMSTP = CURRENT_TIMESTAMP(),
+    EXTRACT_END_TMSTP = CURRENT_TIMESTAMP(),
+    UPDATE_TMSTP = CURRENT_TIMESTAMP(),
+    ERROR_MESSAGE_OBJ = object_construct('error', 'Model failed - see dbt logs for details'),
+    STEP_EXECUTION_OBJ = object_insert(
+        object_insert(
+            STEP_EXECUTION_OBJ,
+            'current_step',
+            'MODEL_FAILED',
+            true
+        ),
+        'execution_timeline',
+        array_append(
+            coalesce(STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]')),
+            object_construct(
+                'step_number', array_size(coalesce(STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]'))) + 1,
+                'timestamp', to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3'),
+                'level', 'Error',
+                'step_type', 'MODEL_FAILED',
+                'title', 'Model Failed',
+                'content', object_construct('status', 'FAILED', 'note', 'See dbt logs for error details')
+            )
+        ),
+        true
+    )
+where PROCESS_STEP_ID = '{{ process_step_id }}'
+  and RECORD_TYPE = 'MODEL'
+  and EXECUTION_STATUS_NAME = 'RUNNING';
+
+-- Update JOB record
 update {{ log_table }}
 set
     EXECUTION_STATUS_NAME = '{{ job_status }}',
@@ -140,6 +177,8 @@ set
     ),
     ERROR_MESSAGE_OBJ = {% if ns.error_count > 0 %}parse_json('{"error_count":{{ ns.error_count }},"errors":{{ error_json }}}'){% else %}parse_json('null'){% endif %}
 where PROCESS_STEP_ID = '{{ process_step_id }}'
-and RECORD_TYPE = 'JOB'
+and RECORD_TYPE = 'JOB';
+
+commit;
 
 {%- endmacro -%}
