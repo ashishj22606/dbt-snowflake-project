@@ -74,13 +74,26 @@ Composite key: `(PROCESS_STEP_ID, RECORD_TYPE, MODEL_NAME)`
 - Model status (SUCCESS/FAILED)
 
 **Key Columns:**
-- `SOURCE_OBJ`: JSON with source dependencies for this model only
+- `SOURCE_OBJ`: JSON with **all** source dependencies for this model
   ```json
   {
-    "source_1": {"type": "source", "name": "jaffle_shop.customers", "node_id": "..."},
-    "source_2": {"type": "ref", "name": "stg_orders", "node_id": "..."}
+    "source_1": {"type": "source", "name": "jaffle_shop.customers", "node_id": "source.project.jaffle_shop.customers"},
+    "source_2": {"type": "ref", "name": "stg_orders", "node_id": "model.project.stg_orders"},
+    "source_3": {"type": "seed", "name": "country_codes", "node_id": "seed.project.country_codes"},
+    "source_4": {"type": "snapshot", "name": "customer_snapshot", "node_id": "snapshot.project.customer_snapshot"}
   }
   ```
+  
+  **Supported types:**
+  - `source`: dbt source() references
+  - `ref`: dbt model references (ref())
+  - `seed`: dbt seed references (ref())
+  - `snapshot`: dbt snapshot references (ref())
+  - `test`: test dependencies (rare)
+  - `analysis`: analysis dependencies (rare)
+  - `exposure`: exposure dependencies (rare)
+  - `unknown_*`: any other dbt node type
+  
 - `DESTINATION_OBJ`: Destination details for this model
   ```json
   {
