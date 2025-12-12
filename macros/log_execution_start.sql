@@ -36,13 +36,10 @@
 {% if graph is defined and graph.nodes is defined and current_model_id in graph.nodes %}
     {% set current_node = graph.nodes[current_model_id] %}
     {{ log("Found model in graph.nodes", info=true) }}
-    {% if current_node.depends_on is defined and current_node.depends_on.nodes is defined %}
-        {{ log("Dependencies count: " ~ (current_node.depends_on.nodes | length), info=true) %}
-    {% else %}
-        {{ log("Dependencies count: 0 (depends_on not available)", info=true) %}
-    {% endif %}
     
     {% if current_node.depends_on is defined and current_node.depends_on.nodes is defined %}
+        {{ log("Dependencies count: " ~ (current_node.depends_on.nodes | length), info=true) }}
+        
         {% for node_id in current_node.depends_on.nodes %}
             {{ log("Processing dependency: " ~ node_id, info=true) }}
             {% set node_parts = node_id.split('.') %}
@@ -106,9 +103,11 @@
                 {% set source_counter = source_counter + 1 %}
             {% endif %}
         {% endfor %}
+        
+        {{ log("Total sources captured: " ~ (sources_dict | length), info=true) }}
+    {% else %}
+        {{ log("Dependencies count: 0 (depends_on not available)", info=true) }}
     {% endif %}
-    
-    {{ log("Total sources captured: " ~ (sources_dict | length), info=true) }}
     
 {% elif model.depends_on is defined and model.depends_on.nodes is defined %}
     {{ log("Using fallback: model.depends_on", info=true) }}
