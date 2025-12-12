@@ -85,17 +85,9 @@ set
     UPDATE_TMSTP = CURRENT_TIMESTAMP(),
     ERROR_MESSAGE_OBJ = object_construct('error', 'Model failed - see dbt logs for details'),
     STEP_EXECUTION_OBJ = object_insert(
-        object_insert(
-            STEP_EXECUTION_OBJ,
-            'current_step',
-            'MODEL_FAILED',
-            true
-        ),
-        'execution_timeline',
-        array_append(
-            coalesce(STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]')),
-            parse_json('{"step_number":999,"timestamp":"' || to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3') || '","level":"Error","step_type":"MODEL_FAILED","title":"Model Failed","content":{"status":"FAILED","note":"See dbt logs for error details"}}')
-        ),
+        STEP_EXECUTION_OBJ,
+        'current_step',
+        'MODEL_FAILED',
         true
     )
 where PROCESS_STEP_ID = '{{ process_step_id }}'
