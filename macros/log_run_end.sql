@@ -94,14 +94,7 @@ set
         'execution_timeline',
         array_append(
             coalesce(STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]')),
-            object_construct(
-                'step_number', array_size(coalesce(STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]'))) + 1,
-                'timestamp', to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3'),
-                'level', 'Error',
-                'step_type', 'MODEL_FAILED',
-                'title', 'Model Failed',
-                'content', object_construct('status', 'FAILED', 'note', 'See dbt logs for error details')
-            )
+            parse_json('{"step_number":999,"timestamp":"' || to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3') || '","level":"Error","step_type":"MODEL_FAILED","title":"Model Failed","content":{"status":"FAILED","note":"See dbt logs for error details"}}')
         ),
         true
     )
