@@ -1,5 +1,14 @@
-{%- macro log_execution_end() -%}
-
+{%- macro log_execution_e    {% if current_node.depends_on is defined and current_node.depends_on.nodes is defined %}
+        {% set dependency_nodes = current_node.depends_on.nodes %}
+        {{ log("Dependencies found: " ~ (dependency_nodes | length), info=true) }}
+        {{ log("Full dependency list: " ~ dependency_nodes, info=true) }}
+        
+        {% for i in range(dependency_nodes | length) %}
+            {% set node_id = dependency_nodes[i] %}
+            {{ log("Processing [" ~ i ~ "]: " ~ node_id, info=true) }}
+            {% set node_parts = node_id.split('.') %}
+            {% set node_type = node_parts[0] %}
+            {{ log("  Type: " ~ node_type ~ ", Counter: " ~ source_counter, info=true) %}
 {#- 
     This macro UPDATES the specific MODEL record when a model FINISHES executing.
     Updates model with SUCCESS status, end time, duration, query ID, and row counts.
@@ -24,10 +33,12 @@
     {{ log("Found in graph.nodes", info=true) }}
     
     {% if current_node.depends_on is defined and current_node.depends_on.nodes is defined %}
-        {{ log("Dependencies found: " ~ (current_node.depends_on.nodes | length), info=true) }}
-        {{ log("Full dependency list: " ~ current_node.depends_on.nodes, info=true) }}
+        {% set dependency_nodes = current_node.depends_on.nodes %}
+        {{ log("Dependencies found: " ~ (dependency_nodes | length), info=true) }}
+        {{ log("Full dependency list: " ~ dependency_nodes, info=true) }}
+        {{ log("Dependency list type: " ~ (dependency_nodes | string), info=true) }}
         
-        {% for node_id in current_node.depends_on.nodes %}
+        {% for node_id in dependency_nodes %}
             {{ log("Processing: " ~ node_id, info=true) }}
             {% set node_parts = node_id.split('.') %}
             {% set node_type = node_parts[0] %}
