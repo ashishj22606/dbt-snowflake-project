@@ -11,6 +11,78 @@
 {% set run_id = invocation_id %}
 {% set process_step_id = 'JOB_' ~ run_id %}
 
+{#- Build source dependencies object (graph is fully available in post-hook) -#}
+{% set sources_dict = {} %}
+{% set source_counter = 1 %}
+{% set current_model_id = model.unique_id if model.unique_id is defined else ('model.' ~ project_name ~ '.' ~ this.name) %}
+
+{% if graph is defined and graph.nodes is defined and current_model_id in graph.nodes %}
+    {% set current_node = graph.nodes[current_model_id] %}
+    
+    {% if current_node.depends_on is defined and current_node.depends_on.nodes is defined %}
+        {% for node_id in current_node.depends_on.nodes %}
+            {% set node_parts = node_id.split('.') %}
+            {% set node_type = node_parts[0] %}
+            
+            {% if node_type == 'source' %}
+                {% set source_name = node_parts[1] ~ '.' ~ node_parts[2] %}
+                {% set source_key = 'source_' ~ source_counter %}
+                {% do sources_dict.update({source_key: {'type': 'source', 'name': source_name, 'node_id': node_id}}) %}
+                {% set source_counter = source_counter + 1 %}
+                
+            {% elif node_type == 'model' %}
+                {% set ref_name = node_parts[2] %}
+                {% set source_key = 'source_' ~ source_counter %}
+                {% do sources_dict.update({source_key: {'type': 'ref', 'name': ref_name, 'node_id': node_id}}) %}
+                {% set source_counter = source_counter + 1 %}
+                
+            {% elif node_type == 'seed' %}
+                {% set seed_name = node_parts[2] %}
+                {% set source_key = 'source_' ~ source_counter %}
+                {% do sources_dict.update({source_key: {'type': 'seed', 'name': seed_name, 'node_id': node_id}}) %}
+                {% set source_counter = source_counter + 1 %}
+                
+            {% elif node_type == 'snapshot' %}
+                {% set snapshot_name = node_parts[2] %}
+                {% set source_key = 'source_' ~ source_counter %}
+                {% do sources_dict.update({source_key: {'type': 'snapshot', 'name': snapshot_name, 'node_id': node_id}}) %}
+                {% set source_counter = source_counter + 1 %}
+                
+            {% elif node_type == 'test' %}
+                {% set test_name = node_parts[2] %}
+                {% set source_key = 'source_' ~ source_counter %}
+                {% do sources_dict.update({source_key: {'type': 'test', 'name': test_name, 'node_id': node_id}}) %}
+                {% set source_counter = source_counter + 1 %}
+                
+            {% elif node_type == 'analysis' %}
+                {% set analysis_name = node_parts[2] %}
+                {% set source_key = 'source_' ~ source_counter %}
+                {% do sources_dict.update({source_key: {'type': 'analysis', 'name': analysis_name, 'node_id': node_id}}) %}
+                {% set source_counter = source_counter + 1 %}
+                
+            {% elif node_type == 'exposure' %}
+                {% set exposure_name = node_parts[2] %}
+                {% set source_key = 'source_' ~ source_counter %}
+                {% do sources_dict.update({source_key: {'type': 'exposure', 'name': exposure_name, 'node_id': node_id}}) %}
+                {% set source_counter = source_counter + 1 %}
+                
+            {% else %}
+                {% set unknown_name = node_parts[2] if node_parts | length > 2 else node_id %}
+                {% set source_key = 'source_' ~ source_counter %}
+                {% do sources_dict.update({source_key: {'type': 'unknown_' ~ node_type, 'name': unknown_name, 'node_id': node_id}}) %}
+                {% set source_counter = source_counter + 1 %}
+            {% endif %}
+        {% endfor %}
+    {% endif %}
+{% endif %}
+
+{#- Build JSON string for sources -#}
+{% set sources_json_parts = [] %}
+{% for key, val in sources_dict.items() %}
+    {% do sources_json_parts.append('"' ~ key ~ '":{"type":"' ~ val.type ~ '","name":"' ~ val.name ~ '","node_id":"' ~ val.node_id ~ '"}') %}
+{% endfor %}
+{% set sources_json = '{' ~ sources_json_parts | join(',') ~ '}' %}
+
 update {{ log_table }}
 set
     EXECUTION_STATUS_NAME = 'SUCCESS',
@@ -18,6 +90,7 @@ set
     EXECUTION_END_TMSTP = CURRENT_TIMESTAMP(),
     EXTRACT_END_TMSTP = CURRENT_TIMESTAMP(),
     UPDATE_TMSTP = CURRENT_TIMESTAMP(),
+    SOURCE_OBJ = parse_json('{{ sources_json }}'),
     SOURCE_DATA_CNT = (select count(*) from {{ this }}),
     DESTINATION_DATA_CNT_OBJ = (select count(*) from {{ this }}),
     STEP_EXECUTION_OBJ = object_insert(
