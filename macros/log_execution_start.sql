@@ -36,7 +36,11 @@
 {% if graph is defined and graph.nodes is defined and current_model_id in graph.nodes %}
     {% set current_node = graph.nodes[current_model_id] %}
     {{ log("Found model in graph.nodes", info=true) }}
-    {{ log("Dependencies count: " ~ (current_node.depends_on.nodes | length if current_node.depends_on is defined and current_node.depends_on.nodes is defined else 0), info=true) }}
+    {% if current_node.depends_on is defined and current_node.depends_on.nodes is defined %}
+        {{ log("Dependencies count: " ~ (current_node.depends_on.nodes | length), info=true) %}
+    {% else %}
+        {{ log("Dependencies count: 0 (depends_on not available)", info=true) %}
+    {% endif %}
     
     {% if current_node.depends_on is defined and current_node.depends_on.nodes is defined %}
         {% for node_id in current_node.depends_on.nodes %}
