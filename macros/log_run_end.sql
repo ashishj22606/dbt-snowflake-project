@@ -69,19 +69,9 @@ set
     EXECUTION_END_TMSTP = CURRENT_TIMESTAMP(),
     EXTRACT_END_TMSTP = CURRENT_TIMESTAMP(),
     UPDATE_TMSTP = CURRENT_TIMESTAMP(),
-    SOURCE_DATA_CNT = (
-        select coalesce(sum(SOURCE_DATA_CNT), 0) 
-        from {{ log_table }} 
-        where PROCESS_STEP_ID = '{{ process_step_id }}' 
-        and RECORD_TYPE = 'MODEL'
-    ),
-    DESTINATION_DATA_CNT_OBJ = object_construct(
-        'total_models', {{ ns.total_count }},
-        'successful_models', {{ ns.success_count }},
-        'failed_models', {{ ns.error_count }},
-        'skipped_models', {{ ns.skip_count }}
-    ),
-    ERROR_MESSAGE_OBJ = {% if ns.error_count > 0 %}object_construct('error_count', {{ ns.error_count }}, 'job_status', '{{ job_status }}'){% else %}null{% endif %}
+    SOURCE_DATA_CNT = {{ ns.total_count }},
+    DESTINATION_DATA_CNT = {{ ns.success_count }},
+    ERROR_MESSAGE = {% if ns.error_count > 0 %}'Job completed with {{ ns.error_count }} error(s)'{% else %}null{% endif %}
 where PROCESS_STEP_ID = '{{ process_step_id }}'
   and RECORD_TYPE = 'JOB'
 
