@@ -72,22 +72,22 @@ update {{ log_table }}
 set
     EXECUTION_STATUS_NAME = case 
         when RECORD_TYPE = 'JOB' then '{{ job_status }}'
-        when RECORD_TYPE = 'MODEL' and MODEL_NAME in ({% for m in failed_models %}'{{ m.name }}'{% if not loop.last %},{% endif %}{% endfor %}) then 'FAILED'
+        {% if failed_models | length > 0 %}when RECORD_TYPE = 'MODEL' and MODEL_NAME in ({% for m in failed_models %}'{{ m.name }}'{% if not loop.last %},{% endif %}{% endfor %}) then 'FAILED'{% endif %}
         else EXECUTION_STATUS_NAME
     end,
     EXECUTION_COMPLETED_IND = case
         when RECORD_TYPE = 'JOB' then 'Y'
-        when RECORD_TYPE = 'MODEL' and MODEL_NAME in ({% for m in failed_models %}'{{ m.name }}'{% if not loop.last %},{% endif %}{% endfor %}) then 'Y'
+        {% if failed_models | length > 0 %}when RECORD_TYPE = 'MODEL' and MODEL_NAME in ({% for m in failed_models %}'{{ m.name }}'{% if not loop.last %},{% endif %}{% endfor %}) then 'Y'{% endif %}
         else EXECUTION_COMPLETED_IND
     end,
     EXECUTION_END_TMSTP = case
         when RECORD_TYPE = 'JOB' then CURRENT_TIMESTAMP()
-        when RECORD_TYPE = 'MODEL' and MODEL_NAME in ({% for m in failed_models %}'{{ m.name }}'{% if not loop.last %},{% endif %}{% endfor %}) then CURRENT_TIMESTAMP()
+        {% if failed_models | length > 0 %}when RECORD_TYPE = 'MODEL' and MODEL_NAME in ({% for m in failed_models %}'{{ m.name }}'{% if not loop.last %},{% endif %}{% endfor %}) then CURRENT_TIMESTAMP(){% endif %}
         else EXECUTION_END_TMSTP
     end,
     EXTRACT_END_TMSTP = case
         when RECORD_TYPE = 'JOB' then CURRENT_TIMESTAMP()
-        when RECORD_TYPE = 'MODEL' and MODEL_NAME in ({% for m in failed_models %}'{{ m.name }}'{% if not loop.last %},{% endif %}{% endfor %}) then CURRENT_TIMESTAMP()
+        {% if failed_models | length > 0 %}when RECORD_TYPE = 'MODEL' and MODEL_NAME in ({% for m in failed_models %}'{{ m.name }}'{% if not loop.last %},{% endif %}{% endfor %}) then CURRENT_TIMESTAMP(){% endif %}
         else EXTRACT_END_TMSTP
     end,
     UPDATE_TMSTP = CURRENT_TIMESTAMP(),
