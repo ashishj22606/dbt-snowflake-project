@@ -16,68 +16,109 @@
 {% set sources_dict = {} %}
 {% set source_counter = 1 %}
 
-{% if model.depends_on is defined and model.depends_on.nodes is defined %}
+{#- Get the current model's unique_id -#}
+{% set current_model_id = model.unique_id if model.unique_id is defined else ('model.' ~ project_name ~ '.' ~ this.name) %}
+
+{#- Try to get dependencies from the graph object (most reliable in hooks) -#}
+{% if graph is defined and graph.nodes is defined and current_model_id in graph.nodes %}
+    {% set current_node = graph.nodes[current_model_id] %}
+    
+    {% if current_node.depends_on is defined and current_node.depends_on.nodes is defined %}
+        {% for node_id in current_node.depends_on.nodes %}
+            {% set node_parts = node_id.split('.') %}
+            {% set node_type = node_parts[0] %}
+            
+            {% if node_type == 'source' %}
+                {#- This is a source() reference -#}
+                {% set source_name = node_parts[1] ~ '.' ~ node_parts[2] %}
+                {% set source_key = 'source_' ~ source_counter %}
+                {% do sources_dict.update({source_key: {'type': 'source', 'name': source_name, 'node_id': node_id}}) %}
+                {% set source_counter = source_counter + 1 %}
+                
+            {% elif node_type == 'model' %}
+                {#- This is a ref() reference to a model -#}
+                {% set ref_name = node_parts[2] %}
+                {% set source_key = 'source_' ~ source_counter %}
+                {% do sources_dict.update({source_key: {'type': 'ref', 'name': ref_name, 'node_id': node_id}}) %}
+                {% set source_counter = source_counter + 1 %}
+                
+            {% elif node_type == 'seed' %}
+                {#- This is a ref() reference to a seed -#}
+                {% set seed_name = node_parts[2] %}
+                {% set source_key = 'source_' ~ source_counter %}
+                {% do sources_dict.update({source_key: {'type': 'seed', 'name': seed_name, 'node_id': node_id}}) %}
+                {% set source_counter = source_counter + 1 %}
+                
+            {% elif node_type == 'snapshot' %}
+                {#- This is a ref() reference to a snapshot -#}
+                {% set snapshot_name = node_parts[2] %}
+                {% set source_key = 'source_' ~ source_counter %}
+                {% do sources_dict.update({source_key: {'type': 'snapshot', 'name': snapshot_name, 'node_id': node_id}}) %}
+                {% set source_counter = source_counter + 1 %}
+                
+            {% elif node_type == 'test' %}
+                {#- This is a test dependency (rare but possible) -#}
+                {% set test_name = node_parts[2] %}
+                {% set source_key = 'source_' ~ source_counter %}
+                {% do sources_dict.update({source_key: {'type': 'test', 'name': test_name, 'node_id': node_id}}) %}
+                {% set source_counter = source_counter + 1 %}
+                
+            {% elif node_type == 'analysis' %}
+                {#- This is an analysis dependency (rare but possible) -#}
+                {% set analysis_name = node_parts[2] %}
+                {% set source_key = 'source_' ~ source_counter %}
+                {% do sources_dict.update({source_key: {'type': 'analysis', 'name': analysis_name, 'node_id': node_id}}) %}
+                {% set source_counter = source_counter + 1 %}
+                
+            {% elif node_type == 'exposure' %}
+                {#- This is an exposure dependency (rare but possible) -#}
+                {% set exposure_name = node_parts[2] %}
+                {% set source_key = 'source_' ~ source_counter %}
+                {% do sources_dict.update({source_key: {'type': 'exposure', 'name': exposure_name, 'node_id': node_id}}) %}
+                {% set source_counter = source_counter + 1 %}
+                
+            {% else %}
+                {#- Unknown node type - capture it anyway -#}
+                {% set unknown_name = node_parts[2] if node_parts | length > 2 else node_id %}
+                {% set source_key = 'source_' ~ source_counter %}
+                {% do sources_dict.update({source_key: {'type': 'unknown_' ~ node_type, 'name': unknown_name, 'node_id': node_id}}) %}
+                {% set source_counter = source_counter + 1 %}
+            {% endif %}
+        {% endfor %}
+    {% endif %}
+    
+{% elif model.depends_on is defined and model.depends_on.nodes is defined %}
+    {#- Fallback: Try model.depends_on if graph is not available -#}
     {% for node_id in model.depends_on.nodes %}
         {% set node_parts = node_id.split('.') %}
         {% set node_type = node_parts[0] %}
         
         {% if node_type == 'source' %}
-            {#- This is a source() reference -#}
             {% set source_name = node_parts[1] ~ '.' ~ node_parts[2] %}
             {% set source_key = 'source_' ~ source_counter %}
             {% do sources_dict.update({source_key: {'type': 'source', 'name': source_name, 'node_id': node_id}}) %}
             {% set source_counter = source_counter + 1 %}
             
         {% elif node_type == 'model' %}
-            {#- This is a ref() reference to a model -#}
             {% set ref_name = node_parts[2] %}
             {% set source_key = 'source_' ~ source_counter %}
             {% do sources_dict.update({source_key: {'type': 'ref', 'name': ref_name, 'node_id': node_id}}) %}
             {% set source_counter = source_counter + 1 %}
             
         {% elif node_type == 'seed' %}
-            {#- This is a ref() reference to a seed -#}
             {% set seed_name = node_parts[2] %}
             {% set source_key = 'source_' ~ source_counter %}
             {% do sources_dict.update({source_key: {'type': 'seed', 'name': seed_name, 'node_id': node_id}}) %}
             {% set source_counter = source_counter + 1 %}
             
         {% elif node_type == 'snapshot' %}
-            {#- This is a ref() reference to a snapshot -#}
             {% set snapshot_name = node_parts[2] %}
             {% set source_key = 'source_' ~ source_counter %}
             {% do sources_dict.update({source_key: {'type': 'snapshot', 'name': snapshot_name, 'node_id': node_id}}) %}
             {% set source_counter = source_counter + 1 %}
-            
-        {% elif node_type == 'test' %}
-            {#- This is a test dependency (rare but possible) -#}
-            {% set test_name = node_parts[2] %}
-            {% set source_key = 'source_' ~ source_counter %}
-            {% do sources_dict.update({source_key: {'type': 'test', 'name': test_name, 'node_id': node_id}}) %}
-            {% set source_counter = source_counter + 1 %}
-            
-        {% elif node_type == 'analysis' %}
-            {#- This is an analysis dependency (rare but possible) -#}
-            {% set analysis_name = node_parts[2] %}
-            {% set source_key = 'source_' ~ source_counter %}
-            {% do sources_dict.update({source_key: {'type': 'analysis', 'name': analysis_name, 'node_id': node_id}}) %}
-            {% set source_counter = source_counter + 1 %}
-            
-        {% elif node_type == 'exposure' %}
-            {#- This is an exposure dependency (rare but possible) -#}
-            {% set exposure_name = node_parts[2] %}
-            {% set source_key = 'source_' ~ source_counter %}
-            {% do sources_dict.update({source_key: {'type': 'exposure', 'name': exposure_name, 'node_id': node_id}}) %}
-            {% set source_counter = source_counter + 1 %}
-            
-        {% else %}
-            {#- Unknown node type - capture it anyway -#}
-            {% set unknown_name = node_parts[2] if node_parts | length > 2 else node_id %}
-            {% set source_key = 'source_' ~ source_counter %}
-            {% do sources_dict.update({source_key: {'type': 'unknown_' ~ node_type, 'name': unknown_name, 'node_id': node_id}}) %}
-            {% set source_counter = source_counter + 1 %}
         {% endif %}
     {% endfor %}
+{% endif %}
 {% endif %}
 
 {#- Build JSON string for sources -#}
