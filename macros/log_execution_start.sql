@@ -19,14 +19,23 @@
 {#- Get the current model's unique_id -#}
 {% set current_model_id = model.unique_id if model.unique_id is defined else ('model.' ~ project_name ~ '.' ~ this.name) %}
 
+{{ log("=== DEPENDENCY DEBUG for " ~ this.name ~ " ===", info=true) }}
+{{ log("Model unique_id: " ~ current_model_id, info=true) }}
+{{ log("Graph defined: " ~ (graph is defined), info=true) }}
+{{ log("Graph.nodes defined: " ~ (graph.nodes is defined if graph is defined else false), info=true) }}
+
 {#- Try to get dependencies from the graph object (most reliable in hooks) -#}
 {% if graph is defined and graph.nodes is defined and current_model_id in graph.nodes %}
     {% set current_node = graph.nodes[current_model_id] %}
+    {{ log("Found model in graph.nodes", info=true) }}
+    {{ log("Dependencies count: " ~ (current_node.depends_on.nodes | length if current_node.depends_on is defined and current_node.depends_on.nodes is defined else 0), info=true) }}
     
     {% if current_node.depends_on is defined and current_node.depends_on.nodes is defined %}
         {% for node_id in current_node.depends_on.nodes %}
+            {{ log("Processing dependency: " ~ node_id, info=true) }}
             {% set node_parts = node_id.split('.') %}
             {% set node_type = node_parts[0] %}
+            {{ log("Node type: " ~ node_type, info=true) }}
             
             {% if node_type == 'source' %}
                 {#- This is a source() reference -#}
@@ -87,7 +96,11 @@
         {% endfor %}
     {% endif %}
     
+    {{ log("Total sources captured: " ~ (sources_dict | length), info=true) }}
+    
 {% elif model.depends_on is defined and model.depends_on.nodes is defined %}
+    {{ log("Using fallback: model.depends_on", info=true) }}
+    {{ log("Dependencies count: " ~ (model.depends_on.nodes | length), info=true) }}
     {#- Fallback: Try model.depends_on if graph is not available -#}
     {% for node_id in model.depends_on.nodes %}
         {% set node_parts = node_id.split('.') %}
@@ -118,7 +131,9 @@
             {% set source_counter = source_counter + 1 %}
         {% endif %}
     {% endfor %}
-{% endif %}
+    {{ log("Total sources captured (fallback): " ~ (sources_dict | length), info=true) }}
+{% else %}
+    {{ log("WARNING: No dependency info available!", info=true) }}
 {% endif %}
 
 {#- Build JSON string for sources -#}
