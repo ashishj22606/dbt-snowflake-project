@@ -70,7 +70,7 @@ set
     EXTRACT_END_TMSTP = CURRENT_TIMESTAMP(),
     UPDATE_TMSTP = CURRENT_TIMESTAMP(),
     SOURCE_DATA_CNT = {{ ns.total_count }},
-    DESTINATION_DATA_CNT = {{ ns.success_count }},
+    DESTINATION_DATA_CNT_OBJ = object_construct('successful_models', {{ ns.success_count }}, 'failed_models', {{ ns.error_count }}),
     ERROR_MESSAGE = {% if ns.error_count > 0 %}'Job completed with {{ ns.error_count }} error(s)'{% else %}null{% endif %}
 where PROCESS_STEP_ID = '{{ process_step_id }}'
   and RECORD_TYPE = 'JOB'
