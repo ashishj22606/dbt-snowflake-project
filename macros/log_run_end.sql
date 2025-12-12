@@ -59,19 +59,8 @@
     {% set job_status = 'SUCCESS' %}
 {% endif %}
 
-{#- Build models JSON array -#}
-{% set models_json_parts = [] %}
-{% for m in ns.models_list %}
-    {% do models_json_parts.append('{"model_name":"' ~ m.name ~ '","status":"' ~ m.status ~ '","execution_time_seconds":' ~ m.time ~ '}') %}
-{% endfor %}
-{% set models_json = '[' ~ models_json_parts | join(',') ~ ']' %}
-
-{#- Build error details JSON array -#}
-{% set error_json_parts = [] %}
-{% for e in ns.error_list %}
-    {% do error_json_parts.append('{"model_name":"' ~ e.model ~ '","error_type":"MODEL_EXECUTION_FAILED","error_message":"' ~ e.error ~ '","execution_time_seconds":' ~ e.time ~ '}') %}
-{% endfor %}
-{% set error_json = '[' ~ error_json_parts | join(',') ~ ']' %}
+{#- Build models summary using object_construct (safer than JSON strings) -#}
+{#- We'll build this in SQL using array_construct and object_construct -#}
 
 update {{ log_table }}
 set
@@ -130,12 +119,25 @@ set
                     'successful_models', {{ ns.success_count }},
                     'failed_models', {{ ns.error_count }},
                     'skipped_models', {{ ns.skip_count }},
-                    'models_summary', parse_json('{{ models_json }}')
+                    'models_summary', array_construct(
+                        {%- for m in ns.models_list %}
+                        object_construct('model_name', '{{ m.name }}', 'status', '{{ m.status }}', 'execution_time_seconds', {{ m.time }})
+                        {%- if not loop.last %},{% endif %}
+                        {%- endfor %}
+                    )
                 )
             )
         )
     ),
-    ERROR_MESSAGE_OBJ = {% if ns.error_count > 0 %}parse_json('{"error_count":{{ ns.error_count }},"errors":{{ error_json }}}'){% else %}null{% endif %}
+    ERROR_MESSAGE_OBJ = {% if ns.error_count > 0 %}object_construct(
+        'error_count', {{ ns.error_count }},
+        'errors', array_construct(
+            {%- for e in ns.error_list %}
+            object_construct('model_name', '{{ e.model }}', 'error_type', 'MODEL_EXECUTION_FAILED', 'error_message', '{{ e.error | replace("'", "''") }}', 'execution_time_seconds', {{ e.time }})
+            {%- if not loop.last %},{% endif %}
+            {%- endfor %}
+        )
+    ){% else %}null{% endif %}
 where PROCESS_STEP_ID = '{{ process_step_id }}'
   and RECORD_TYPE = 'JOB'
 
