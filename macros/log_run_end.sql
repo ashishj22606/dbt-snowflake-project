@@ -59,11 +59,12 @@
     {% set job_status = 'SUCCESS' %}
 {% endif %}
 
-{#- Build list of failed model names for IN clause -#}
+{#- Build list of failed model names and their error messages -#}
 {% set failed_models = [] %}
 {% for res in results %}
     {% if res.status == 'error' %}
-        {% do failed_models.append(res.node.name) %}
+        {% set error_msg = res.message | default('Unknown error') | replace("'", "''") | replace('\n', ' ') | replace('\r', '') %}
+        {% do failed_models.append({'name': res.node.name, 'error': error_msg[:500]}) %}
     {% endif %}
 {% endfor %}
 
@@ -71,22 +72,22 @@ update {{ log_table }}
 set
     EXECUTION_STATUS_NAME = case 
         when RECORD_TYPE = 'JOB' then '{{ job_status }}'
-        when RECORD_TYPE = 'MODEL' and MODEL_NAME in ({% for name in failed_models %}'{{ name }}'{% if not loop.last %},{% endif %}{% endfor %}) then 'FAILED'
+        when RECORD_TYPE = 'MODEL' and MODEL_NAME in ({% for m in failed_models %}'{{ m.name }}'{% if not loop.last %},{% endif %}{% endfor %}) then 'FAILED'
         else EXECUTION_STATUS_NAME
     end,
     EXECUTION_COMPLETED_IND = case
         when RECORD_TYPE = 'JOB' then 'Y'
-        when RECORD_TYPE = 'MODEL' and MODEL_NAME in ({% for name in failed_models %}'{{ name }}'{% if not loop.last %},{% endif %}{% endfor %}) then 'Y'
+        when RECORD_TYPE = 'MODEL' and MODEL_NAME in ({% for m in failed_models %}'{{ m.name }}'{% if not loop.last %},{% endif %}{% endfor %}) then 'Y'
         else EXECUTION_COMPLETED_IND
     end,
     EXECUTION_END_TMSTP = case
         when RECORD_TYPE = 'JOB' then CURRENT_TIMESTAMP()
-        when RECORD_TYPE = 'MODEL' and MODEL_NAME in ({% for name in failed_models %}'{{ name }}'{% if not loop.last %},{% endif %}{% endfor %}) then CURRENT_TIMESTAMP()
+        when RECORD_TYPE = 'MODEL' and MODEL_NAME in ({% for m in failed_models %}'{{ m.name }}'{% if not loop.last %},{% endif %}{% endfor %}) then CURRENT_TIMESTAMP()
         else EXECUTION_END_TMSTP
     end,
     EXTRACT_END_TMSTP = case
         when RECORD_TYPE = 'JOB' then CURRENT_TIMESTAMP()
-        when RECORD_TYPE = 'MODEL' and MODEL_NAME in ({% for name in failed_models %}'{{ name }}'{% if not loop.last %},{% endif %}{% endfor %}) then CURRENT_TIMESTAMP()
+        when RECORD_TYPE = 'MODEL' and MODEL_NAME in ({% for m in failed_models %}'{{ m.name }}'{% if not loop.last %},{% endif %}{% endfor %}) then CURRENT_TIMESTAMP()
         else EXTRACT_END_TMSTP
     end,
     UPDATE_TMSTP = CURRENT_TIMESTAMP(),
@@ -100,9 +101,12 @@ set
     end,
     ERROR_MESSAGE_OBJ = case
         when RECORD_TYPE = 'JOB' then {% if ns.error_count > 0 %}object_construct('error_count', {{ ns.error_count }}, 'status', '{{ job_status }}'){% else %}null{% endif %}
+        {% for m in failed_models %}
+        when RECORD_TYPE = 'MODEL' and MODEL_NAME = '{{ m.name }}' then object_construct('error_type', 'MODEL_EXECUTION_FAILED', 'error_message', '{{ m.error }}', 'status', 'FAILED')
+        {% endfor %}
         else ERROR_MESSAGE_OBJ
     end
 where PROCESS_STEP_ID = '{{ process_step_id }}'
-  and (RECORD_TYPE = 'JOB' {% if failed_models | length > 0 %}or (RECORD_TYPE = 'MODEL' and MODEL_NAME in ({% for name in failed_models %}'{{ name }}'{% if not loop.last %},{% endif %}{% endfor %})){% endif %})
+  and (RECORD_TYPE = 'JOB' {% if failed_models | length > 0 %}or (RECORD_TYPE = 'MODEL' and MODEL_NAME in ({% for m in failed_models %}'{{ m.name }}'{% if not loop.last %},{% endif %}{% endfor %})){% endif %})
 
 {%- endmacro -%}
