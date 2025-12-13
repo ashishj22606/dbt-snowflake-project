@@ -2,7 +2,7 @@
     config(
         materialized='incremental',
         unique_key='CORRELATION_ID',
-        schema='PROVTOERRPM_CORE_TARGET',
+        schema='PROVIDERPDM_CORE_TARGET',
         alias='TRANSMISSION_AUDIT_LOG',
         tags=['marts', 'core']
     )
