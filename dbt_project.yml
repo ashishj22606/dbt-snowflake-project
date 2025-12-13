@@ -23,6 +23,13 @@ clean-targets: # directories to be removed by `dbt clean`
   - "target"
   - "dbt_packages"
 
+# Job-level hooks - runs once at start/end of entire dbt run
+on-run-start:
+  - "{{ log_run_start() }}"
+
+on-run-end:
+  - "{{ log_run_end() }}"
+
 # Configuring models
 # Full documentation: https://docs.getdbt.com/docs/configuring-models
 
@@ -35,6 +42,9 @@ clean-targets: # directories to be removed by `dbt clean`
 
 models:
   dbt_fundamentals:
+    # Apply logging hooks to all models
+    +pre-hook: "{{ log_execution_start() }}"
+    +post-hook: "{{ log_execution_end() }}"
     # Applies to all files in folders under models/
     staging:
       # + sign indicates a property and not a folder
