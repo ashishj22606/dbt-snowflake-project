@@ -15,18 +15,12 @@ set
     UPDATE_TMSTP = CURRENT_TIMESTAMP(),
     SOURCE_DATA_CNT = (select count(*) from {{ this }}),
     DESTINATION_DATA_CNT_OBJ = (select count(*) from {{ this }}),
-    STEP_EXECUTION_OBJ = object_insert(
-        object_insert(
-            object_insert(
-                STEP_EXECUTION_OBJ,
-                'current_step',
-                'MODEL_COMPLETED'
-            ),
-            'query_id_end',
-            LAST_QUERY_ID()
-        ),
-        'execution_timeline',
-        array_append(
+    STEP_EXECUTION_OBJ = object_construct(
+        'model_name', coalesce(STEP_EXECUTION_OBJ:model_name::varchar, '{{ model_name }}'),
+        'current_step', 'MODEL_COMPLETED',
+        'query_id_start', coalesce(STEP_EXECUTION_OBJ:query_id_start::varchar, null),
+        'query_id_end', LAST_QUERY_ID(),
+        'execution_timeline', array_append(
             coalesce(STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]')),
             object_construct(
                 'step_number', array_size(coalesce(STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]'))) + 1,
