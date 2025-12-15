@@ -16,14 +16,14 @@ set
     SOURCE_DATA_CNT = (select count(*) from {{ this }}),
     DESTINATION_DATA_CNT_OBJ = (select count(*) from {{ this }}),
     STEP_EXECUTION_OBJ = object_construct(
-        'model_name', coalesce(STEP_EXECUTION_OBJ:model_name::varchar, '{{ model_name }}'),
+        'model_name', STEP_EXECUTION_OBJ:model_name::varchar,
         'current_step', 'MODEL_COMPLETED',
-        'query_id_start', coalesce(STEP_EXECUTION_OBJ:query_id_start::varchar, null),
+        'query_id_start', STEP_EXECUTION_OBJ:query_id_start::varchar,
         'query_id_end', LAST_QUERY_ID(),
         'execution_timeline', array_append(
-            coalesce(STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]')),
+            STEP_EXECUTION_OBJ:execution_timeline,
             object_construct(
-                'step_number', array_size(coalesce(STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]'))) + 1,
+                'step_number', array_size(STEP_EXECUTION_OBJ:execution_timeline) + 1,
                 'timestamp', to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3'),
                 'level', 'Info',
                 'step_type', 'MODEL_COMPLETE',
