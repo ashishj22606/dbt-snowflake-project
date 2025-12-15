@@ -99,11 +99,11 @@ update {{ log_table }} t
         )
 from (
     select 
-        PROCESS_STEP_ID,
-        RECORD_TYPE,
-        MODEL_NAME,
-        STEP_EXECUTION_OBJ,
-        EXECUTION_START_TMSTP,
+        l.PROCESS_STEP_ID,
+        l.RECORD_TYPE,
+        l.MODEL_NAME,
+        l.STEP_EXECUTION_OBJ,
+        l.EXECUTION_START_TMSTP,
         l.PROCESS_CONFIG_OBJ:materialization::varchar as materialization,
         l.PROCESS_CONFIG_OBJ:execution_type::varchar as execution_type,
         (select count(*) from {{ this }}) as row_count,
@@ -112,8 +112,8 @@ from (
         coalesce(q.rows_deleted, 0) as rows_deleted,
         coalesce(q.rows_affected, 0) as rows_affected,
         row_number() over (
-            partition by PROCESS_STEP_ID, RECORD_TYPE, MODEL_NAME
-            order by coalesce(UPDATE_TMSTP, INSERT_TMSTP) desc, INSERT_TMSTP desc
+            partition by l.PROCESS_STEP_ID, l.RECORD_TYPE, l.MODEL_NAME
+            order by coalesce(l.UPDATE_TMSTP, l.INSERT_TMSTP) desc, l.INSERT_TMSTP desc
         ) as rn
     from {{ log_table }} l
     left join (
@@ -126,9 +126,9 @@ from (
         from table(information_schema.query_history())
         where QUERY_ID = LAST_QUERY_ID()
     ) q on 1=1
-    where PROCESS_STEP_ID = '{{ process_step_id }}'
-      and RECORD_TYPE = 'MODEL'
-      and MODEL_NAME = '{{ model_name }}'
+    where l.PROCESS_STEP_ID = '{{ process_step_id }}'
+      and l.RECORD_TYPE = 'MODEL'
+      and l.MODEL_NAME = '{{ model_name }}'
       qualify rn = 1
 ) c
 where t.PROCESS_STEP_ID = c.PROCESS_STEP_ID
