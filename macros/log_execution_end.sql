@@ -20,9 +20,46 @@ update {{ log_table }} t
             'query_id_start', c.STEP_EXECUTION_OBJ:query_id_start::varchar,
             'query_id_end', LAST_QUERY_ID(),
             'execution_timeline', array_append(
-                iff(is_array(c.STEP_EXECUTION_OBJ:execution_timeline), c.STEP_EXECUTION_OBJ:execution_timeline, array_construct()),
+                case
+                    when array_size(iff(is_array(c.STEP_EXECUTION_OBJ:execution_timeline), c.STEP_EXECUTION_OBJ:execution_timeline, array_construct())) = 0
+                    then array_cat(
+                        array_construct(),
+                        array_construct(
+                            object_construct(
+                                'step_number', 1,
+                                'timestamp', to_varchar(c.EXECUTION_START_TMSTP, 'YYYY-MM-DD HH24:MI:SS.FF3'),
+                                'level', 'Info',
+                                'step_type', 'MODEL_START',
+                                'title', 'Model Started: {{ model_name }}',
+                                'query_id', c.STEP_EXECUTION_OBJ:query_id_start::varchar,
+                                'content', object_construct(
+                                    'model', '{{ model_name }}'
+                                )
+                            )
+                        )
+                    )
+                    else iff(is_array(c.STEP_EXECUTION_OBJ:execution_timeline), c.STEP_EXECUTION_OBJ:execution_timeline, array_construct())
+                end,
                 object_construct(
-                    'step_number', array_size(iff(is_array(c.STEP_EXECUTION_OBJ:execution_timeline), c.STEP_EXECUTION_OBJ:execution_timeline, array_construct())) + 1,
+                    'step_number', array_size(
+                        case
+                            when array_size(iff(is_array(c.STEP_EXECUTION_OBJ:execution_timeline), c.STEP_EXECUTION_OBJ:execution_timeline, array_construct())) = 0
+                            then array_construct(
+                                object_construct(
+                                    'step_number', 1,
+                                    'timestamp', to_varchar(c.EXECUTION_START_TMSTP, 'YYYY-MM-DD HH24:MI:SS.FF3'),
+                                    'level', 'Info',
+                                    'step_type', 'MODEL_START',
+                                    'title', 'Model Started: {{ model_name }}',
+                                    'query_id', c.STEP_EXECUTION_OBJ:query_id_start::varchar,
+                                    'content', object_construct(
+                                        'model', '{{ model_name }}'
+                                    )
+                                )
+                            )
+                            else iff(is_array(c.STEP_EXECUTION_OBJ:execution_timeline), c.STEP_EXECUTION_OBJ:execution_timeline, array_construct())
+                        end
+                    ) + 1,
                     'timestamp', to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3'),
                     'level', 'Info',
                     'step_type', 'MODEL_COMPLETE',
@@ -47,6 +84,7 @@ from (
         RECORD_TYPE,
         MODEL_NAME,
         STEP_EXECUTION_OBJ,
+        EXECUTION_START_TMSTP,
         (select count(*) from {{ this }}) as row_count,
         row_number() over (
             partition by PROCESS_STEP_ID, RECORD_TYPE, MODEL_NAME
