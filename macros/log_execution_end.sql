@@ -10,6 +10,8 @@ merge into {{ log_table }} as target
 using (
     select 
         PROCESS_STEP_ID,
+        MODEL_NAME,
+        RECORD_TYPE,
         STEP_EXECUTION_OBJ,
         (select count(*) from {{ this }}) as row_count
     from {{ log_table }}
@@ -18,8 +20,8 @@ using (
       and MODEL_NAME = '{{ model_name }}'
 ) as source
 on target.PROCESS_STEP_ID = source.PROCESS_STEP_ID 
-   and target.RECORD_TYPE = 'MODEL'
-   and target.MODEL_NAME = '{{ model_name }}'
+   and target.RECORD_TYPE = source.RECORD_TYPE
+   and target.MODEL_NAME = source.MODEL_NAME
 when matched then update set
     target.EXECUTION_STATUS_NAME = 'SUCCESS',
     target.EXECUTION_COMPLETED_IND = 'Y',
@@ -56,6 +58,5 @@ when matched then update set
                 )
             )
     )
-  and MODEL_NAME = '{{ model_name }}'
 
 {%- endmacro -%}
