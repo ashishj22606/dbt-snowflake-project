@@ -6,57 +6,56 @@
 {% set run_id = invocation_id %}
 {% set process_step_id = 'JOB_' ~ run_id %}
 
-merge into {{ log_table }} as target
-using (
+with current_model as (
     select 
         PROCESS_STEP_ID,
-        MODEL_NAME,
         RECORD_TYPE,
+        MODEL_NAME,
         STEP_EXECUTION_OBJ,
         (select count(*) from {{ this }}) as row_count
     from {{ log_table }}
     where PROCESS_STEP_ID = '{{ process_step_id }}'
       and RECORD_TYPE = 'MODEL'
       and MODEL_NAME = '{{ model_name }}'
-) as source
-on target.PROCESS_STEP_ID = source.PROCESS_STEP_ID 
-   and target.RECORD_TYPE = source.RECORD_TYPE
-   and target.MODEL_NAME = source.MODEL_NAME
-when matched then update set
-    target.EXECUTION_STATUS_NAME = 'SUCCESS',
-    target.EXECUTION_COMPLETED_IND = 'Y',
-    target.EXECUTION_END_TMSTP = CURRENT_TIMESTAMP(),
-    target.EXTRACT_END_TMSTP = CURRENT_TIMESTAMP(),
-    target.UPDATE_TMSTP = CURRENT_TIMESTAMP(),
-    target.SOURCE_DATA_CNT = source.row_count,
-    target.DESTINATION_DATA_CNT_OBJ = source.row_count,
-    target.STEP_EXECUTION_OBJ = object_construct(
-        'model_name', source.STEP_EXECUTION_OBJ:model_name::varchar,
-        'current_step', 'MODEL_COMPLETED',
-        'query_id_start', source.STEP_EXECUTION_OBJ:query_id_start::varchar,
-        'query_id_end', LAST_QUERY_ID(),
-        'execution_timeline', 
-            array_append(
-                source.STEP_EXECUTION_OBJ:execution_timeline,
+)
+update {{ log_table }} t
+    set EXECUTION_STATUS_NAME = 'SUCCESS',
+        EXECUTION_COMPLETED_IND = 'Y',
+        EXECUTION_END_TMSTP = CURRENT_TIMESTAMP(),
+        EXTRACT_END_TMSTP = CURRENT_TIMESTAMP(),
+        UPDATE_TMSTP = CURRENT_TIMESTAMP(),
+        SOURCE_DATA_CNT = c.row_count,
+        DESTINATION_DATA_CNT_OBJ = c.row_count,
+        STEP_EXECUTION_OBJ = object_construct(
+            'model_name', c.STEP_EXECUTION_OBJ:model_name::varchar,
+            'current_step', 'MODEL_COMPLETED',
+            'query_id_start', c.STEP_EXECUTION_OBJ:query_id_start::varchar,
+            'query_id_end', LAST_QUERY_ID(),
+            'execution_timeline', array_append(
+                coalesce(c.STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]')),
                 object_construct(
-                    'step_number', array_size(source.STEP_EXECUTION_OBJ:execution_timeline) + 1,
+                    'step_number', array_size(coalesce(c.STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]'))) + 1,
                     'timestamp', to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3'),
                     'level', 'Info',
                     'step_type', 'MODEL_COMPLETE',
                     'title', 'Model Completed: {{ model_name }}',
                     'query_id', LAST_QUERY_ID(),
                     'query_result', object_construct(
-                        'rows_in_destination', source.row_count,
+                        'rows_in_destination', c.row_count,
                         'execution_status', 'SUCCESS'
                     ),
                     'content', object_construct(
                         'model', '{{ model_name }}',
                         'status', 'SUCCESS',
-                        'rows_processed', source.row_count,
+                        'rows_processed', c.row_count,
                         'destination_table', '{{ this.database }}.{{ this.schema }}.{{ this.identifier }}'
                     )
                 )
             )
-    )
+        )
+from current_model c
+where t.PROCESS_STEP_ID = c.PROCESS_STEP_ID
+  and t.RECORD_TYPE = c.RECORD_TYPE
+  and t.MODEL_NAME = c.MODEL_NAME
 
 {%- endmacro -%}
