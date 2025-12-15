@@ -20,12 +20,10 @@ set
             object_insert(
                 STEP_EXECUTION_OBJ,
                 'current_step',
-                'MODEL_COMPLETED',
-                true
+                'MODEL_COMPLETED'
             ),
             'query_id_end',
-            LAST_QUERY_ID(),
-            true
+            LAST_QUERY_ID()
         ),
         'execution_timeline',
         array_append(
@@ -48,8 +46,7 @@ set
                     'destination_table', '{{ this.database }}.{{ this.schema }}.{{ this.identifier }}'
                 )
             )
-        ),
-        true
+        )
     )
 where PROCESS_STEP_ID = '{{ process_step_id }}'
   and RECORD_TYPE = 'MODEL'
