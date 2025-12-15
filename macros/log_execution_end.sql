@@ -6,18 +6,6 @@
 {% set run_id = invocation_id %}
 {% set process_step_id = 'JOB_' ~ run_id %}
 
-with current_model as (
-    select 
-        PROCESS_STEP_ID,
-        RECORD_TYPE,
-        MODEL_NAME,
-        STEP_EXECUTION_OBJ,
-        (select count(*) from {{ this }}) as row_count
-    from {{ log_table }}
-    where PROCESS_STEP_ID = '{{ process_step_id }}'
-      and RECORD_TYPE = 'MODEL'
-      and MODEL_NAME = '{{ model_name }}'
-)
 update {{ log_table }} t
     set EXECUTION_STATUS_NAME = 'SUCCESS',
         EXECUTION_COMPLETED_IND = 'Y',
@@ -53,7 +41,18 @@ update {{ log_table }} t
                 )
             )
         )
-from current_model c
+from (
+    select 
+        PROCESS_STEP_ID,
+        RECORD_TYPE,
+        MODEL_NAME,
+        STEP_EXECUTION_OBJ,
+        (select count(*) from {{ this }}) as row_count
+    from {{ log_table }}
+    where PROCESS_STEP_ID = '{{ process_step_id }}'
+      and RECORD_TYPE = 'MODEL'
+      and MODEL_NAME = '{{ model_name }}'
+) c
 where t.PROCESS_STEP_ID = c.PROCESS_STEP_ID
   and t.RECORD_TYPE = c.RECORD_TYPE
   and t.MODEL_NAME = c.MODEL_NAME
