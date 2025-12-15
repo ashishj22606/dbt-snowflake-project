@@ -107,15 +107,26 @@ from (
         l.PROCESS_CONFIG_OBJ:materialization::varchar as materialization,
         l.PROCESS_CONFIG_OBJ:execution_type::varchar as execution_type,
         (select count(*) from {{ this }}) as row_count,
-        0 as rows_inserted,
-        0 as rows_updated,
-        0 as rows_deleted,
-        0 as rows_affected,
+        coalesce(q.rows_inserted, 0) as rows_inserted,
+        coalesce(q.rows_updated, 0) as rows_updated,
+        coalesce(q.rows_deleted, 0) as rows_deleted,
+        coalesce(q.rows_produced, 0) as rows_affected,
         row_number() over (
             partition by l.PROCESS_STEP_ID, l.RECORD_TYPE, l.MODEL_NAME
             order by coalesce(l.UPDATE_TMSTP, l.INSERT_TMSTP) desc, l.INSERT_TMSTP desc
         ) as rn
     from {{ log_table }} l
+    left join (
+        select
+            QUERY_ID,
+            ROWS_INSERTED,
+            ROWS_UPDATED,
+            ROWS_DELETED,
+            ROWS_PRODUCED
+        from SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
+        where QUERY_ID = LAST_QUERY_ID()
+        limit 1
+    ) q on q.QUERY_ID = LAST_QUERY_ID()
     where l.PROCESS_STEP_ID = '{{ process_step_id }}'
       and l.RECORD_TYPE = 'MODEL'
       and l.MODEL_NAME = '{{ model_name }}'
