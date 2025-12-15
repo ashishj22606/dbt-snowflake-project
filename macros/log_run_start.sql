@@ -12,7 +12,6 @@
 {% set process_step_id = 'JOB_' ~ run_id %}
 
 insert into {{ log_table }} (
-    PROCESS_CONFIG_SK,
     PROCESS_STEP_ID,
     RECORD_TYPE,
     MODEL_NAME,
@@ -26,8 +25,6 @@ insert into {{ log_table }} (
     SOURCE_DATA_CNT,
     DESTINATION_DATA_CNT_OBJ,
     EXECUTION_TYPE_NAME,
-    EXTRACT_START_TMSTP,
-    EXTRACT_END_TMSTP,
     ERROR_MESSAGE_OBJ,
     STEP_EXECUTION_OBJ,
     INSERT_TMSTP,
@@ -35,7 +32,6 @@ insert into {{ log_table }} (
     DELETED_IND
 )
 select
-    null as PROCESS_CONFIG_SK,
     '{{ process_step_id }}' as PROCESS_STEP_ID,
     'JOB' as RECORD_TYPE,
     null as MODEL_NAME,
@@ -49,8 +45,6 @@ select
     0 as SOURCE_DATA_CNT,
     parse_json('null') as DESTINATION_DATA_CNT_OBJ,
     'DBT_JOB_RUN' as EXECUTION_TYPE_NAME,
-    CURRENT_TIMESTAMP() as EXTRACT_START_TMSTP,
-    null::TIMESTAMP_NTZ as EXTRACT_END_TMSTP,
     parse_json('null') as ERROR_MESSAGE_OBJ,
     parse_json('{"current_step":"JOB_STARTED","execution_timeline":[{"step_number":1,"timestamp":"' || to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3') || '","level":"Info","step_type":"JOB_START","title":"Job Started","content":{"invocation_id":"{{ run_id }}","project":"{{ project_name }}","target":"{{ target.name }}"}}]}') as STEP_EXECUTION_OBJ,
     CURRENT_TIMESTAMP() as INSERT_TMSTP,

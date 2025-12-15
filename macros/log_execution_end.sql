@@ -10,7 +10,6 @@ update {{ log_table }} t
     set EXECUTION_STATUS_NAME = 'SUCCESS',
         EXECUTION_COMPLETED_IND = 'Y',
         EXECUTION_END_TMSTP = CURRENT_TIMESTAMP(),
-        EXTRACT_END_TMSTP = CURRENT_TIMESTAMP(),
         UPDATE_TMSTP = CURRENT_TIMESTAMP(),
         SOURCE_DATA_CNT = c.row_count,
         DESTINATION_DATA_CNT_OBJ = c.row_count,
