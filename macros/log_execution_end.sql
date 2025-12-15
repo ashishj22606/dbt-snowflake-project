@@ -14,37 +14,29 @@ update {{ log_table }} t
         UPDATE_TMSTP = CURRENT_TIMESTAMP(),
         SOURCE_DATA_CNT = c.row_count,
         DESTINATION_DATA_CNT_OBJ = c.row_count,
-        STEP_EXECUTION_OBJ = object_insert(
-            object_insert(
-                object_insert(
-                    c.STEP_EXECUTION_OBJ,
-                    'current_step',
-                    'MODEL_COMPLETED'
-                ),
-                'query_id_end',
-                LAST_QUERY_ID()
-            ),
-            'execution_timeline',
-            array_cat(
+        STEP_EXECUTION_OBJ = object_construct(
+            'model_name', c.STEP_EXECUTION_OBJ:model_name::varchar,
+            'current_step', 'MODEL_COMPLETED',
+            'query_id_start', c.STEP_EXECUTION_OBJ:query_id_start::varchar,
+            'query_id_end', LAST_QUERY_ID(),
+            'execution_timeline', array_append(
                 iff(is_array(c.STEP_EXECUTION_OBJ:execution_timeline), c.STEP_EXECUTION_OBJ:execution_timeline, array_construct()),
-                array_construct(
-                    object_construct(
-                        'step_number', array_size(iff(is_array(c.STEP_EXECUTION_OBJ:execution_timeline), c.STEP_EXECUTION_OBJ:execution_timeline, array_construct())) + 1,
-                        'timestamp', to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3'),
-                        'level', 'Info',
-                        'step_type', 'MODEL_COMPLETE',
-                        'title', 'Model Completed: {{ model_name }}',
-                        'query_id', LAST_QUERY_ID(),
-                        'query_result', object_construct(
-                            'rows_in_destination', c.row_count,
-                            'execution_status', 'SUCCESS'
-                        ),
-                        'content', object_construct(
-                            'model', '{{ model_name }}',
-                            'status', 'SUCCESS',
-                            'rows_processed', c.row_count,
-                            'destination_table', '{{ this.database }}.{{ this.schema }}.{{ this.identifier }}'
-                        )
+                object_construct(
+                    'step_number', array_size(iff(is_array(c.STEP_EXECUTION_OBJ:execution_timeline), c.STEP_EXECUTION_OBJ:execution_timeline, array_construct())) + 1,
+                    'timestamp', to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3'),
+                    'level', 'Info',
+                    'step_type', 'MODEL_COMPLETE',
+                    'title', 'Model Completed: {{ model_name }}',
+                    'query_id', LAST_QUERY_ID(),
+                    'query_result', object_construct(
+                        'rows_in_destination', c.row_count,
+                        'execution_status', 'SUCCESS'
+                    ),
+                    'content', object_construct(
+                        'model', '{{ model_name }}',
+                        'status', 'SUCCESS',
+                        'rows_processed', c.row_count,
+                        'destination_table', '{{ this.database }}.{{ this.schema }}.{{ this.identifier }}'
                     )
                 )
             )
