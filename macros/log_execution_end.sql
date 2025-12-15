@@ -13,6 +13,16 @@ update {{ log_table }} t
         UPDATE_TMSTP = CURRENT_TIMESTAMP(),
         SOURCE_DATA_CNT = c.row_count,
         DESTINATION_DATA_CNT_OBJ = c.row_count,
+        METRICS_OBJ = object_construct(
+            'load_type', c.execution_type,
+            'materialization', c.materialization,
+            'processing_ms', datediff('millisecond', c.EXECUTION_START_TMSTP, current_timestamp()),
+            'rows_total', c.row_count,
+            'rows_inserted', c.rows_inserted,
+            'rows_updated', c.rows_updated,
+            'rows_deleted', c.rows_deleted,
+            'rows_affected', c.rows_affected
+        ),
         STEP_EXECUTION_OBJ = object_construct(
             'model_name', c.STEP_EXECUTION_OBJ:model_name::varchar,
             'current_step', 'MODEL_COMPLETED',
@@ -68,6 +78,16 @@ update {{ log_table }} t
                         'rows_in_destination', c.row_count,
                         'execution_status', 'SUCCESS'
                     ),
+                    'metrics', object_construct(
+                        'load_type', c.execution_type,
+                        'materialization', c.materialization,
+                        'processing_ms', datediff('millisecond', c.EXECUTION_START_TMSTP, current_timestamp()),
+                        'rows_total', c.row_count,
+                        'rows_inserted', c.rows_inserted,
+                        'rows_updated', c.rows_updated,
+                        'rows_deleted', c.rows_deleted,
+                        'rows_affected', c.rows_affected
+                    ),
                     'content', object_construct(
                         'model', '{{ model_name }}',
                         'status', 'SUCCESS',
@@ -84,12 +104,28 @@ from (
         MODEL_NAME,
         STEP_EXECUTION_OBJ,
         EXECUTION_START_TMSTP,
+        c.PROCESS_CONFIG_OBJ:materialization::varchar as materialization,
+        c.PROCESS_CONFIG_OBJ:execution_type::varchar as execution_type,
         (select count(*) from {{ this }}) as row_count,
+        q.rows_inserted,
+        q.rows_updated,
+        q.rows_deleted,
+        q.rows_affected,
         row_number() over (
             partition by PROCESS_STEP_ID, RECORD_TYPE, MODEL_NAME
             order by coalesce(UPDATE_TMSTP, INSERT_TMSTP) desc, INSERT_TMSTP desc
         ) as rn
     from {{ log_table }}
+    left join (
+        select
+            query_id,
+            rows_inserted,
+            rows_updated,
+            rows_deleted,
+            rows_affected
+        from table(information_schema.query_history())
+        where query_id = LAST_QUERY_ID()
+    ) q
     where PROCESS_STEP_ID = '{{ process_step_id }}'
       and RECORD_TYPE = 'MODEL'
       and MODEL_NAME = '{{ model_name }}'

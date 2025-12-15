@@ -84,6 +84,7 @@ insert into {{ log_table }} (
     DESTINATION_DATA_CNT_OBJ,
     EXECUTION_TYPE_NAME,
     ERROR_MESSAGE_OBJ,
+    METRICS_OBJ,
     STEP_EXECUTION_OBJ,
     INSERT_TMSTP,
     UPDATE_TMSTP,
@@ -115,6 +116,7 @@ select
     parse_json('null') as DESTINATION_DATA_CNT_OBJ,
     '{{ execution_type }}' as EXECUTION_TYPE_NAME,
     parse_json('null') as ERROR_MESSAGE_OBJ,
+    parse_json('null') as METRICS_OBJ,
     object_construct(
         'model_name', '{{ model_name }}',
         'current_step', 'MODEL_STARTED',
