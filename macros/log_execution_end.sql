@@ -104,13 +104,13 @@ from (
         MODEL_NAME,
         STEP_EXECUTION_OBJ,
         EXECUTION_START_TMSTP,
-    l.PROCESS_CONFIG_OBJ:materialization::varchar as materialization,
-    l.PROCESS_CONFIG_OBJ:execution_type::varchar as execution_type,
-    (select count(*) from {{ this }}) as row_count,
-    coalesce(q.ROWS_INSERTED, 0) as rows_inserted,
-    coalesce(q.ROWS_UPDATED, 0) as rows_updated,
-    coalesce(q.ROWS_DELETED, 0) as rows_deleted,
-    coalesce(q.ROWS_AFFECTED, 0) as rows_affected,
+        l.PROCESS_CONFIG_OBJ:materialization::varchar as materialization,
+        l.PROCESS_CONFIG_OBJ:execution_type::varchar as execution_type,
+        (select count(*) from {{ this }}) as row_count,
+        coalesce(q.rows_inserted, 0) as rows_inserted,
+        coalesce(q.rows_updated, 0) as rows_updated,
+        coalesce(q.rows_deleted, 0) as rows_deleted,
+        coalesce(q.rows_affected, 0) as rows_affected,
         row_number() over (
             partition by PROCESS_STEP_ID, RECORD_TYPE, MODEL_NAME
             order by coalesce(UPDATE_TMSTP, INSERT_TMSTP) desc, INSERT_TMSTP desc
@@ -119,14 +119,13 @@ from (
     left join (
         select
             QUERY_ID,
-            ROWS_INSERTED,
-            ROWS_UPDATED,
-            ROWS_DELETED,
-            ROWS_AFFECTED
+            ROWS_INSERTED as rows_inserted,
+            ROWS_UPDATED as rows_updated,
+            ROWS_DELETED as rows_deleted,
+            ROWS_AFFECTED as rows_affected
         from table(information_schema.query_history())
-        where query_id = LAST_QUERY_ID()
-    ) q
-      on q.QUERY_ID = LAST_QUERY_ID()
+        where QUERY_ID = LAST_QUERY_ID()
+    ) q on 1=1
     where PROCESS_STEP_ID = '{{ process_step_id }}'
       and RECORD_TYPE = 'MODEL'
       and MODEL_NAME = '{{ model_name }}'
