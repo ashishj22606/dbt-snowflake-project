@@ -104,18 +104,18 @@ from (
         MODEL_NAME,
         STEP_EXECUTION_OBJ,
         EXECUTION_START_TMSTP,
-        c.PROCESS_CONFIG_OBJ:materialization::varchar as materialization,
-        c.PROCESS_CONFIG_OBJ:execution_type::varchar as execution_type,
+        l.PROCESS_CONFIG_OBJ:materialization::varchar as materialization,
+        l.PROCESS_CONFIG_OBJ:execution_type::varchar as execution_type,
         (select count(*) from {{ this }}) as row_count,
-        q.rows_inserted,
-        q.rows_updated,
-        q.rows_deleted,
-        q.rows_affected,
+        coalesce(q.rows_inserted, 0) as rows_inserted,
+        coalesce(q.rows_updated, 0) as rows_updated,
+        coalesce(q.rows_deleted, 0) as rows_deleted,
+        coalesce(q.rows_affected, 0) as rows_affected,
         row_number() over (
             partition by PROCESS_STEP_ID, RECORD_TYPE, MODEL_NAME
             order by coalesce(UPDATE_TMSTP, INSERT_TMSTP) desc, INSERT_TMSTP desc
         ) as rn
-    from {{ log_table }}
+    from {{ log_table }} l
     left join (
         select
             query_id,
@@ -126,6 +126,7 @@ from (
         from table(information_schema.query_history())
         where query_id = LAST_QUERY_ID()
     ) q
+      on q.query_id = LAST_QUERY_ID()
     where PROCESS_STEP_ID = '{{ process_step_id }}'
       and RECORD_TYPE = 'MODEL'
       and MODEL_NAME = '{{ model_name }}'
