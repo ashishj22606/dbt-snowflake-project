@@ -14,15 +14,21 @@ update {{ log_table }} t
         UPDATE_TMSTP = CURRENT_TIMESTAMP(),
         SOURCE_DATA_CNT = c.row_count,
         DESTINATION_DATA_CNT_OBJ = c.row_count,
-        STEP_EXECUTION_OBJ = object_construct(
-            'model_name', c.STEP_EXECUTION_OBJ:model_name::varchar,
-            'current_step', 'MODEL_COMPLETED',
-            'query_id_start', c.STEP_EXECUTION_OBJ:query_id_start::varchar,
-            'query_id_end', LAST_QUERY_ID(),
-            'execution_timeline', array_append(
-                coalesce(c.STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]')),
+        STEP_EXECUTION_OBJ = object_insert(
+            object_insert(
+                object_insert(
+                    c.STEP_EXECUTION_OBJ,
+                    'current_step',
+                    'MODEL_COMPLETED'
+                ),
+                'query_id_end',
+                LAST_QUERY_ID()
+            ),
+            'execution_timeline',
+            array_append(
+                iff(is_array(c.STEP_EXECUTION_OBJ:execution_timeline), c.STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]')),
                 object_construct(
-                    'step_number', array_size(coalesce(c.STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]'))) + 1,
+                    'step_number', array_size(iff(is_array(c.STEP_EXECUTION_OBJ:execution_timeline), c.STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]'))) + 1,
                     'timestamp', to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3'),
                     'level', 'Info',
                     'step_type', 'MODEL_COMPLETE',
