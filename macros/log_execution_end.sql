@@ -91,13 +91,32 @@ update {{ log_table }} t
         )
 from (
     with query_metrics as (
-        select query_id, rows_produced, rows_inserted, rows_updated, rows_deleted, rows_written_to_result
+        select query_id, 
+               rows_produced, 
+               rows_inserted, 
+               rows_updated, 
+               rows_deleted, 
+               rows_written_to_result
         from (
-            select query_id, rows_produced, rows_inserted, rows_updated, rows_deleted, rows_written_to_result, start_time, 1 as src_priority
+            select query_id, 
+                   rows_produced, 
+                   rows_inserted, 
+                   0 as rows_updated,
+                   0 as rows_deleted,
+                   0 as rows_written_to_result,
+                   start_time, 
+                   1 as src_priority
             from table(information_schema.query_history_by_session())
             where query_id = LAST_QUERY_ID()
             union all
-            select query_id, rows_produced, rows_inserted, rows_updated, rows_deleted, rows_written_to_result, start_time, 2 as src_priority
+            select query_id, 
+                   rows_produced, 
+                   rows_inserted, 
+                   rows_updated, 
+                   rows_deleted, 
+                   rows_written_to_result, 
+                   start_time, 
+                   2 as src_priority
             from snowflake.account_usage.query_history
             where query_id = LAST_QUERY_ID()
         ) s
