@@ -87,6 +87,11 @@ set
         else t.EXECUTION_END_TMSTP
     end,
     UPDATE_TMSTP = CURRENT_TIMESTAMP(),
+    PROCESSING_TIME_SEC = case
+        when t.RECORD_TYPE = 'JOB' then datediff('second', t.EXECUTION_START_TMSTP, CURRENT_TIMESTAMP())
+        {% if failed_models | length > 0 %}when t.RECORD_TYPE = 'MODEL' and t.MODEL_NAME in ({% for m in failed_models %}'{{ m.name }}'{% if not loop.last %},{% endif %}{% endfor %}) then datediff('second', t.EXECUTION_START_TMSTP, CURRENT_TIMESTAMP()){% endif %}
+        else t.PROCESSING_TIME_SEC
+    end,
     ERROR_MESSAGE_OBJ = case
         when t.RECORD_TYPE = 'JOB' then {% if ns.error_count > 0 %}object_construct('error_count', {{ ns.error_count }}, 'status', '{{ job_status }}'){% else %}null{% endif %}
         {% for m in failed_models %}
