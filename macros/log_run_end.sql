@@ -92,7 +92,7 @@ set
         else t.SOURCE_DATA_CNT
     end,
     DESTINATION_DATA_CNT_OBJ = case
-        when t.RECORD_TYPE = 'JOB' then object_construct('total_models', {{ ns.total_count }}, 'successful_models', {{ ns.success_count }}, 'failed_models', {{ ns.error_count }}, 'skipped_models', {{ ns.skip_count }})
+        when t.RECORD_TYPE = 'JOB' then to_variant(object_construct('total_models', {{ ns.total_count }}, 'successful_models', {{ ns.success_count }}, 'failed_models', {{ ns.error_count }}, 'skipped_models', {{ ns.skip_count }}))
         else t.DESTINATION_DATA_CNT_OBJ
     end,
     ERROR_MESSAGE_OBJ = case
