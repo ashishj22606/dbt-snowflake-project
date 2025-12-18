@@ -90,6 +90,20 @@ update {{ log_table }} t
             )
         )
 from (
+    with query_metrics as (
+        select query_id, rows_produced, rows_inserted, rows_updated, rows_deleted, rows_written_to_result
+        from (
+            select query_id, rows_produced, rows_inserted, rows_updated, rows_deleted, rows_written_to_result, start_time, 1 as src_priority
+            from table(information_schema.query_history_by_session())
+            where query_id = LAST_QUERY_ID()
+            union all
+            select query_id, rows_produced, rows_inserted, rows_updated, rows_deleted, rows_written_to_result, start_time, 2 as src_priority
+            from snowflake.account_usage.query_history
+            where query_id = LAST_QUERY_ID()
+        ) s
+        order by src_priority, start_time desc
+        limit 1
+    )
     select 
         l.PROCESS_STEP_ID,
         l.RECORD_TYPE,
@@ -109,25 +123,7 @@ from (
             order by coalesce(l.UPDATE_TMSTP, l.INSERT_TMSTP) desc, l.INSERT_TMSTP desc
         ) as rn
     from {{ log_table }} l
-    left join lateral (
-        select query_id,
-               rows_produced,
-               rows_inserted,
-               rows_updated,
-               rows_deleted,
-               rows_written_to_result
-        from (
-            select query_id, rows_produced, rows_inserted, rows_updated, rows_deleted, rows_written_to_result, start_time, 1 as src_priority
-            from table(information_schema.query_history_by_session())
-            where query_id = LAST_QUERY_ID()
-            union all
-            select query_id, rows_produced, rows_inserted, rows_updated, rows_deleted, rows_written_to_result, start_time, 2 as src_priority
-            from snowflake.account_usage.query_history
-            where query_id = LAST_QUERY_ID()
-        ) s
-        order by src_priority, start_time desc
-        limit 1
-    ) q on true
+    cross join query_metrics q
     where l.PROCESS_STEP_ID = '{{ process_step_id }}'
       and l.RECORD_TYPE = 'MODEL'
       and l.MODEL_NAME = '{{ model_name }}'
