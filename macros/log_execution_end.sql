@@ -119,8 +119,8 @@ from (
             ROWS_WRITTEN_TO_RESULT
         from table(information_schema.query_history_by_session())
         where QUERY_ID = LAST_QUERY_ID()
-        limit 1
-    ) q on q.QUERY_ID = LAST_QUERY_ID()
+        qualify row_number() over (order by start_time desc) = 1
+    ) q on true
     where l.PROCESS_STEP_ID = '{{ process_step_id }}'
       and l.RECORD_TYPE = 'MODEL'
       and l.MODEL_NAME = '{{ model_name }}'
