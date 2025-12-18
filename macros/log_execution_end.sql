@@ -109,15 +109,15 @@ from (
             order by coalesce(l.UPDATE_TMSTP, l.INSERT_TMSTP) desc, l.INSERT_TMSTP desc
         ) as rn
     from {{ log_table }} l
-    left join (
+    left join lateral (
         select
             QUERY_ID,
+            ROWS_PRODUCED,
             ROWS_INSERTED,
             ROWS_UPDATED,
             ROWS_DELETED,
-            ROWS_PRODUCED,
             ROWS_WRITTEN_TO_RESULT
-        from SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
+        from table(information_schema.query_history_by_session())
         where QUERY_ID = LAST_QUERY_ID()
         limit 1
     ) q on q.QUERY_ID = LAST_QUERY_ID()
