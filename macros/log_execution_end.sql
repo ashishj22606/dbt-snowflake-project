@@ -11,16 +11,11 @@ update {{ log_table }} t
         EXECUTION_COMPLETED_IND = 'Y',
         EXECUTION_END_TMSTP = CURRENT_TIMESTAMP(),
         UPDATE_TMSTP = CURRENT_TIMESTAMP(),
-        METRICS_OBJ = object_construct(
-            'load_type', c.execution_type,
-            'materialization', c.materialization,
-            'processing_ms', datediff('millisecond', c.EXECUTION_START_TMSTP, current_timestamp()),
-            'rows_total', c.row_count,
-            'rows_inserted', c.rows_inserted,
-            'rows_updated', c.rows_updated,
-            'rows_deleted', c.rows_deleted,
-            'rows_affected', c.rows_affected
-        ),
+        ROWS_PRODUCED = c.rows_produced,
+        ROWS_INSERTED = c.rows_inserted,
+        ROWS_UPDATED = c.rows_updated,
+        ROWS_DELETED = c.rows_deleted,
+        ROWS_WRITTEN_TO_RESULT = c.rows_written_to_result,
         STEP_EXECUTION_OBJ = object_construct(
             'model_name', c.STEP_EXECUTION_OBJ:model_name::varchar,
             'current_step', 'MODEL_COMPLETED',
@@ -76,15 +71,14 @@ update {{ log_table }} t
                         'rows_in_destination', c.row_count,
                         'execution_status', 'SUCCESS'
                     ),
+                    -- metrics block kept for timeline context (optional)
                     'metrics', object_construct(
-                        'load_type', c.execution_type,
-                        'materialization', c.materialization,
-                        'processing_ms', datediff('millisecond', c.EXECUTION_START_TMSTP, current_timestamp()),
                         'rows_total', c.row_count,
+                        'rows_produced', c.rows_produced,
                         'rows_inserted', c.rows_inserted,
                         'rows_updated', c.rows_updated,
                         'rows_deleted', c.rows_deleted,
-                        'rows_affected', c.rows_affected
+                        'rows_written_to_result', c.rows_written_to_result
                     ),
                     'content', object_construct(
                         'model', '{{ model_name }}',
@@ -105,10 +99,11 @@ from (
         l.PROCESS_CONFIG_OBJ:materialization::varchar as materialization,
         l.PROCESS_CONFIG_OBJ:execution_type::varchar as execution_type,
         (select count(*) from {{ this }}) as row_count,
+        coalesce(q.rows_produced, 0) as rows_produced,
         coalesce(q.rows_inserted, 0) as rows_inserted,
         coalesce(q.rows_updated, 0) as rows_updated,
         coalesce(q.rows_deleted, 0) as rows_deleted,
-        coalesce(q.rows_produced, 0) as rows_affected,
+        coalesce(q.rows_written_to_result, 0) as rows_written_to_result,
         row_number() over (
             partition by l.PROCESS_STEP_ID, l.RECORD_TYPE, l.MODEL_NAME
             order by coalesce(l.UPDATE_TMSTP, l.INSERT_TMSTP) desc, l.INSERT_TMSTP desc
@@ -120,7 +115,8 @@ from (
             ROWS_INSERTED,
             ROWS_UPDATED,
             ROWS_DELETED,
-            ROWS_PRODUCED
+            ROWS_PRODUCED,
+            ROWS_WRITTEN_TO_RESULT
         from SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
         where QUERY_ID = LAST_QUERY_ID()
         limit 1

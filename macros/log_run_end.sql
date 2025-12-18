@@ -94,13 +94,6 @@ set
         {% endfor %}
         else t.ERROR_MESSAGE_OBJ
     end,
-    METRICS_OBJ = case
-        when t.RECORD_TYPE = 'JOB' then parse_json('null')
-        {% for m in failed_models %}
-        when t.RECORD_TYPE = 'MODEL' and t.MODEL_NAME = '{{ m.name }}' then object_construct('load_type', 'failed', 'status', 'FAILED', 'error', '{{ m.error }}')
-        {% endfor %}
-        else t.METRICS_OBJ
-    end,
     STEP_EXECUTION_OBJ = case
         when t.RECORD_TYPE = 'JOB' then object_construct('current_step', 'JOB_COMPLETED', 'job_status', '{{ job_status }}', 'total_models', {{ ns.total_count }}, 'successful_models', {{ ns.success_count }}, 'failed_models', {{ ns.error_count }}, 'skipped_models', {{ ns.skip_count }})
         {% for m in failed_models %}
