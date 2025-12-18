@@ -109,18 +109,25 @@ from (
             order by coalesce(l.UPDATE_TMSTP, l.INSERT_TMSTP) desc, l.INSERT_TMSTP desc
         ) as rn
     from {{ log_table }} l
-    left join (
-        select
-            QUERY_ID,
-            ROWS_PRODUCED,
-            ROWS_INSERTED,
-            ROWS_UPDATED,
-            ROWS_DELETED,
-            ROWS_WRITTEN_TO_RESULT
-        from SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
-        where QUERY_ID = LAST_QUERY_ID()
+    left join lateral (
+        select query_id,
+               rows_produced,
+               rows_inserted,
+               rows_updated,
+               rows_deleted,
+               rows_written_to_result
+        from (
+            select query_id, rows_produced, rows_inserted, rows_updated, rows_deleted, rows_written_to_result, start_time, 1 as src_priority
+            from table(information_schema.query_history_by_session())
+            where query_id = LAST_QUERY_ID()
+            union all
+            select query_id, rows_produced, rows_inserted, rows_updated, rows_deleted, rows_written_to_result, start_time, 2 as src_priority
+            from snowflake.account_usage.query_history
+            where query_id = LAST_QUERY_ID()
+        ) s
+        order by src_priority, start_time desc
         limit 1
-    ) q on q.QUERY_ID = LAST_QUERY_ID()
+    ) q on true
     where l.PROCESS_STEP_ID = '{{ process_step_id }}'
       and l.RECORD_TYPE = 'MODEL'
       and l.MODEL_NAME = '{{ model_name }}'
