@@ -87,14 +87,6 @@ set
         else t.EXECUTION_END_TMSTP
     end,
     UPDATE_TMSTP = CURRENT_TIMESTAMP(),
-    SOURCE_DATA_CNT = case
-        when t.RECORD_TYPE = 'JOB' then {{ ns.total_count }}
-        else t.SOURCE_DATA_CNT
-    end,
-    DESTINATION_DATA_CNT_OBJ = case
-        when t.RECORD_TYPE = 'JOB' then to_variant(object_construct('total_models', {{ ns.total_count }}, 'successful_models', {{ ns.success_count }}, 'failed_models', {{ ns.error_count }}, 'skipped_models', {{ ns.skip_count }}))
-        else t.DESTINATION_DATA_CNT_OBJ
-    end,
     ERROR_MESSAGE_OBJ = case
         when t.RECORD_TYPE = 'JOB' then {% if ns.error_count > 0 %}object_construct('error_count', {{ ns.error_count }}, 'status', '{{ job_status }}'){% else %}null{% endif %}
         {% for m in failed_models %}

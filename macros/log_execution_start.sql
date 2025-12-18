@@ -80,8 +80,6 @@ insert into {{ log_table }} (
     SOURCE_OBJ,
     DESTINATION_OBJ,
     PROCESS_CONFIG_OBJ,
-    SOURCE_DATA_CNT,
-    DESTINATION_DATA_CNT_OBJ,
     EXECUTION_TYPE_NAME,
     ERROR_MESSAGE_OBJ,
     METRICS_OBJ,
@@ -112,8 +110,6 @@ select
         'materialization', '{{ materialization }}',
         'execution_type', '{{ execution_type }}'
     ) as PROCESS_CONFIG_OBJ,
-    0 as SOURCE_DATA_CNT,
-    parse_json('null') as DESTINATION_DATA_CNT_OBJ,
     '{{ execution_type }}' as EXECUTION_TYPE_NAME,
     parse_json('null') as ERROR_MESSAGE_OBJ,
     parse_json('null') as METRICS_OBJ,

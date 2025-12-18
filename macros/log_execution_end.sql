@@ -11,8 +11,6 @@ update {{ log_table }} t
         EXECUTION_COMPLETED_IND = 'Y',
         EXECUTION_END_TMSTP = CURRENT_TIMESTAMP(),
         UPDATE_TMSTP = CURRENT_TIMESTAMP(),
-        SOURCE_DATA_CNT = c.row_count,
-        DESTINATION_DATA_CNT_OBJ = c.row_count,
         METRICS_OBJ = object_construct(
             'load_type', c.execution_type,
             'materialization', c.materialization,
