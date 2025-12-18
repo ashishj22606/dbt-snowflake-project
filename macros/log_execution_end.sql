@@ -16,6 +16,7 @@ update {{ log_table }} t
         ROWS_UPDATED = c.rows_updated,
         ROWS_DELETED = c.rows_deleted,
         ROWS_WRITTEN_TO_RESULT = c.rows_written_to_result,
+        PROCESSING_TIME_SEC = c.processing_time_sec,
         STEP_EXECUTION_OBJ = object_construct(
             'model_name', c.STEP_EXECUTION_OBJ:model_name::varchar,
             'current_step', 'MODEL_COMPLETED',
@@ -137,6 +138,7 @@ from (
         coalesce(q.rows_updated, 0) as rows_updated,
         coalesce(q.rows_deleted, 0) as rows_deleted,
         coalesce(q.rows_written_to_result, 0) as rows_written_to_result,
+        datediff('second', l.EXECUTION_START_TMSTP, current_timestamp()) as processing_time_sec,
         row_number() over (
             partition by l.PROCESS_STEP_ID, l.RECORD_TYPE, l.MODEL_NAME
             order by coalesce(l.UPDATE_TMSTP, l.INSERT_TMSTP) desc, l.INSERT_TMSTP desc
