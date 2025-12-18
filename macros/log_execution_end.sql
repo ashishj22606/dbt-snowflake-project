@@ -109,7 +109,7 @@ from (
             order by coalesce(l.UPDATE_TMSTP, l.INSERT_TMSTP) desc, l.INSERT_TMSTP desc
         ) as rn
     from {{ log_table }} l
-    left join lateral (
+    left join (
         select
             QUERY_ID,
             ROWS_PRODUCED,
@@ -117,11 +117,10 @@ from (
             ROWS_UPDATED,
             ROWS_DELETED,
             ROWS_WRITTEN_TO_RESULT
-        from table(information_schema.query_history_by_session())
+        from SNOWFLAKE.ACCOUNT_USAGE.QUERY_HISTORY
         where QUERY_ID = LAST_QUERY_ID()
-        order by start_time desc
         limit 1
-    ) q on true
+    ) q on q.QUERY_ID = LAST_QUERY_ID()
     where l.PROCESS_STEP_ID = '{{ process_step_id }}'
       and l.RECORD_TYPE = 'MODEL'
       and l.MODEL_NAME = '{{ model_name }}'
