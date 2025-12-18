@@ -70,7 +70,6 @@
 {% endif %}
 
 insert into {{ log_table }} (
-    PROCESS_CONFIG_SK,
     PROCESS_STEP_ID,
     RECORD_TYPE,
     MODEL_NAME,
@@ -81,19 +80,19 @@ insert into {{ log_table }} (
     SOURCE_OBJ,
     DESTINATION_OBJ,
     PROCESS_CONFIG_OBJ,
-    SOURCE_DATA_CNT,
-    DESTINATION_DATA_CNT_OBJ,
     EXECUTION_TYPE_NAME,
-    EXTRACT_START_TMSTP,
-    EXTRACT_END_TMSTP,
     ERROR_MESSAGE_OBJ,
+    ROWS_PRODUCED,
+    ROWS_INSERTED,
+    ROWS_UPDATED,
+    ROWS_DELETED,
+    ROWS_WRITTEN_TO_RESULT,
     STEP_EXECUTION_OBJ,
     INSERT_TMSTP,
     UPDATE_TMSTP,
     DELETED_IND
 )
 select
-    null as PROCESS_CONFIG_SK,
     '{{ process_step_id }}' as PROCESS_STEP_ID,
     'MODEL' as RECORD_TYPE,
     '{{ model_name }}' as MODEL_NAME,
@@ -115,12 +114,13 @@ select
         'materialization', '{{ materialization }}',
         'execution_type', '{{ execution_type }}'
     ) as PROCESS_CONFIG_OBJ,
-    0 as SOURCE_DATA_CNT,
-    parse_json('null') as DESTINATION_DATA_CNT_OBJ,
     '{{ execution_type }}' as EXECUTION_TYPE_NAME,
-    CURRENT_TIMESTAMP() as EXTRACT_START_TMSTP,
-    null::TIMESTAMP_NTZ as EXTRACT_END_TMSTP,
     parse_json('null') as ERROR_MESSAGE_OBJ,
+    0 as ROWS_PRODUCED,
+    0 as ROWS_INSERTED,
+    0 as ROWS_UPDATED,
+    0 as ROWS_DELETED,
+    0 as ROWS_WRITTEN_TO_RESULT,
     object_construct(
         'model_name', '{{ model_name }}',
         'current_step', 'MODEL_STARTED',

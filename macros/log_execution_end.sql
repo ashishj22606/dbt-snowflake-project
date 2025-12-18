@@ -6,53 +6,152 @@
 {% set run_id = invocation_id %}
 {% set process_step_id = 'JOB_' ~ run_id %}
 
-update {{ log_table }}
-set
-    EXECUTION_STATUS_NAME = 'SUCCESS',
-    EXECUTION_COMPLETED_IND = 'Y',
-    EXECUTION_END_TMSTP = CURRENT_TIMESTAMP(),
-    EXTRACT_END_TMSTP = CURRENT_TIMESTAMP(),
-    UPDATE_TMSTP = CURRENT_TIMESTAMP(),
-    SOURCE_DATA_CNT = (select count(*) from {{ this }}),
-    DESTINATION_DATA_CNT_OBJ = (select count(*) from {{ this }}),
-    STEP_EXECUTION_OBJ = object_insert(
-        object_insert(
-            object_insert(
-                STEP_EXECUTION_OBJ,
-                'current_step',
-                'MODEL_COMPLETED',
-                true
-            ),
-            'query_id_end',
-            LAST_QUERY_ID(),
-            true
-        ),
-        'execution_timeline',
-        array_append(
-            coalesce(STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]')),
-            object_construct(
-                'step_number', array_size(coalesce(STEP_EXECUTION_OBJ:execution_timeline, parse_json('[]'))) + 1,
-                'timestamp', to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3'),
-                'level', 'Info',
-                'step_type', 'MODEL_COMPLETE',
-                'title', 'Model Completed: {{ model_name }}',
-                'query_id', LAST_QUERY_ID(),
-                'query_result', object_construct(
-                    'rows_in_destination', (select count(*) from {{ this }}),
-                    'execution_status', 'SUCCESS'
-                ),
-                'content', object_construct(
-                    'model', '{{ model_name }}',
-                    'status', 'SUCCESS',
-                    'rows_processed', (select count(*) from {{ this }}),
-                    'destination_table', '{{ this.database }}.{{ this.schema }}.{{ this.identifier }}'
+update {{ log_table }} t
+    set EXECUTION_STATUS_NAME = 'SUCCESS',
+        EXECUTION_COMPLETED_IND = 'Y',
+        EXECUTION_END_TMSTP = CURRENT_TIMESTAMP(),
+        UPDATE_TMSTP = CURRENT_TIMESTAMP(),
+        ROWS_PRODUCED = c.rows_produced,
+        ROWS_INSERTED = c.rows_inserted,
+        ROWS_UPDATED = c.rows_updated,
+        ROWS_DELETED = c.rows_deleted,
+        ROWS_WRITTEN_TO_RESULT = c.rows_written_to_result,
+        PROCESSING_TIME_SEC = c.processing_time_sec,
+        STEP_EXECUTION_OBJ = object_construct(
+            'model_name', c.STEP_EXECUTION_OBJ:model_name::varchar,
+            'current_step', 'MODEL_COMPLETED',
+            'query_id_start', c.STEP_EXECUTION_OBJ:query_id_start::varchar,
+            'query_id_end', LAST_QUERY_ID(),
+            'execution_timeline', array_append(
+                case
+                    when array_size(iff(is_array(c.STEP_EXECUTION_OBJ:execution_timeline), c.STEP_EXECUTION_OBJ:execution_timeline, array_construct())) = 0
+                    then array_cat(
+                        array_construct(),
+                        array_construct(
+                            object_construct(
+                                'step_number', 1,
+                                'timestamp', to_varchar(c.EXECUTION_START_TMSTP, 'YYYY-MM-DD HH24:MI:SS.FF3'),
+                                'level', 'Info',
+                                'step_type', 'MODEL_START',
+                                'title', 'Model Started: {{ model_name }}',
+                                'query_id', c.STEP_EXECUTION_OBJ:query_id_start::varchar,
+                                'content', object_construct(
+                                    'model', '{{ model_name }}'
+                                )
+                            )
+                        )
+                    )
+                    else iff(is_array(c.STEP_EXECUTION_OBJ:execution_timeline), c.STEP_EXECUTION_OBJ:execution_timeline, array_construct())
+                end,
+                object_construct(
+                    'step_number', array_size(
+                        case
+                            when array_size(iff(is_array(c.STEP_EXECUTION_OBJ:execution_timeline), c.STEP_EXECUTION_OBJ:execution_timeline, array_construct())) = 0
+                            then array_construct(
+                                object_construct(
+                                    'step_number', 1,
+                                    'timestamp', to_varchar(c.EXECUTION_START_TMSTP, 'YYYY-MM-DD HH24:MI:SS.FF3'),
+                                    'level', 'Info',
+                                    'step_type', 'MODEL_START',
+                                    'title', 'Model Started: {{ model_name }}',
+                                    'query_id', c.STEP_EXECUTION_OBJ:query_id_start::varchar,
+                                    'content', object_construct(
+                                        'model', '{{ model_name }}'
+                                    )
+                                )
+                            )
+                            else iff(is_array(c.STEP_EXECUTION_OBJ:execution_timeline), c.STEP_EXECUTION_OBJ:execution_timeline, array_construct())
+                        end
+                    ) + 1,
+                    'timestamp', to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3'),
+                    'level', 'Info',
+                    'step_type', 'MODEL_COMPLETE',
+                    'title', 'Model Completed: {{ model_name }}',
+                    'query_id', LAST_QUERY_ID(),
+                    'query_result', object_construct(
+                        'rows_in_destination', c.row_count,
+                        'execution_status', 'SUCCESS'
+                    ),
+                    -- metrics block kept for timeline context (optional)
+                    'metrics', object_construct(
+                        'rows_total', c.row_count,
+                        'rows_produced', c.rows_produced,
+                        'rows_inserted', c.rows_inserted,
+                        'rows_updated', c.rows_updated,
+                        'rows_deleted', c.rows_deleted,
+                        'rows_written_to_result', c.rows_written_to_result
+                    ),
+                    'content', object_construct(
+                        'model', '{{ model_name }}',
+                        'status', 'SUCCESS',
+                        'rows_processed', c.row_count,
+                        'destination_table', '{{ this.database }}.{{ this.schema }}.{{ this.identifier }}'
+                    )
                 )
             )
-        ),
-        true
+        )
+from (
+    with query_metrics as (
+        select query_id, 
+               rows_produced, 
+               rows_inserted, 
+               rows_updated, 
+               rows_deleted, 
+               rows_written_to_result
+        from (
+            select query_id, 
+                   rows_produced, 
+                   rows_inserted, 
+                   0 as rows_updated,
+                   0 as rows_deleted,
+                   0 as rows_written_to_result,
+                   start_time, 
+                   1 as src_priority
+            from table(information_schema.query_history_by_session())
+            where query_id = LAST_QUERY_ID()
+            union all
+            select query_id, 
+                   rows_produced, 
+                   rows_inserted, 
+                   rows_updated, 
+                   rows_deleted, 
+                   rows_written_to_result, 
+                   start_time, 
+                   2 as src_priority
+            from snowflake.account_usage.query_history
+            where query_id = LAST_QUERY_ID()
+        ) s
+        order by src_priority, start_time desc
+        limit 1
     )
-where PROCESS_STEP_ID = '{{ process_step_id }}'
-  and RECORD_TYPE = 'MODEL'
-  and MODEL_NAME = '{{ model_name }}'
+    select 
+        l.PROCESS_STEP_ID,
+        l.RECORD_TYPE,
+        l.MODEL_NAME,
+        l.STEP_EXECUTION_OBJ,
+        l.EXECUTION_START_TMSTP,
+        l.PROCESS_CONFIG_OBJ:materialization::varchar as materialization,
+        l.PROCESS_CONFIG_OBJ:execution_type::varchar as execution_type,
+        (select count(*) from {{ this }}) as row_count,
+        coalesce(q.rows_produced, 0) as rows_produced,
+        coalesce(q.rows_inserted, 0) as rows_inserted,
+        coalesce(q.rows_updated, 0) as rows_updated,
+        coalesce(q.rows_deleted, 0) as rows_deleted,
+        coalesce(q.rows_written_to_result, 0) as rows_written_to_result,
+        datediff('second', l.EXECUTION_START_TMSTP, current_timestamp()) as processing_time_sec,
+        row_number() over (
+            partition by l.PROCESS_STEP_ID, l.RECORD_TYPE, l.MODEL_NAME
+            order by coalesce(l.UPDATE_TMSTP, l.INSERT_TMSTP) desc, l.INSERT_TMSTP desc
+        ) as rn
+    from {{ log_table }} l
+    cross join query_metrics q
+    where l.PROCESS_STEP_ID = '{{ process_step_id }}'
+      and l.RECORD_TYPE = 'MODEL'
+      and l.MODEL_NAME = '{{ model_name }}'
+      qualify rn = 1
+) c
+where t.PROCESS_STEP_ID = c.PROCESS_STEP_ID
+  and t.RECORD_TYPE = c.RECORD_TYPE
+  and t.MODEL_NAME = c.MODEL_NAME
 
 {%- endmacro -%}

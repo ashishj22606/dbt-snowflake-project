@@ -69,52 +69,95 @@
     {% endif %}
 {% endfor %}
 
-update {{ log_table }}
+update {{ log_table }} t
 set
     EXECUTION_STATUS_NAME = case 
-        when RECORD_TYPE = 'JOB' then '{{ job_status }}'
-        {% if failed_models | length > 0 %}when RECORD_TYPE = 'MODEL' and MODEL_NAME in ({% for m in failed_models %}'{{ m.name }}'{% if not loop.last %},{% endif %}{% endfor %}) then 'FAILED'{% endif %}
-        else EXECUTION_STATUS_NAME
+        when t.RECORD_TYPE = 'JOB' then '{{ job_status }}'
+        {% if failed_models | length > 0 %}when t.RECORD_TYPE = 'MODEL' and t.MODEL_NAME in ({% for m in failed_models %}'{{ m.name }}'{% if not loop.last %},{% endif %}{% endfor %}) then 'FAILED'{% endif %}
+        else t.EXECUTION_STATUS_NAME
     end,
     EXECUTION_COMPLETED_IND = case
-        when RECORD_TYPE = 'JOB' then 'Y'
-        {% if failed_models | length > 0 %}when RECORD_TYPE = 'MODEL' and MODEL_NAME in ({% for m in failed_models %}'{{ m.name }}'{% if not loop.last %},{% endif %}{% endfor %}) then 'Y'{% endif %}
-        else EXECUTION_COMPLETED_IND
+        when t.RECORD_TYPE = 'JOB' then 'Y'
+        {% if failed_models | length > 0 %}when t.RECORD_TYPE = 'MODEL' and t.MODEL_NAME in ({% for m in failed_models %}'{{ m.name }}'{% if not loop.last %},{% endif %}{% endfor %}) then 'Y'{% endif %}
+        else t.EXECUTION_COMPLETED_IND
     end,
     EXECUTION_END_TMSTP = case
-        when RECORD_TYPE = 'JOB' then CURRENT_TIMESTAMP()
-        {% if failed_models | length > 0 %}when RECORD_TYPE = 'MODEL' and MODEL_NAME in ({% for m in failed_models %}'{{ m.name }}'{% if not loop.last %},{% endif %}{% endfor %}) then CURRENT_TIMESTAMP(){% endif %}
-        else EXECUTION_END_TMSTP
-    end,
-    EXTRACT_END_TMSTP = case
-        when RECORD_TYPE = 'JOB' then CURRENT_TIMESTAMP()
-        {% if failed_models | length > 0 %}when RECORD_TYPE = 'MODEL' and MODEL_NAME in ({% for m in failed_models %}'{{ m.name }}'{% if not loop.last %},{% endif %}{% endfor %}) then CURRENT_TIMESTAMP(){% endif %}
-        else EXTRACT_END_TMSTP
+        when t.RECORD_TYPE = 'JOB' then CURRENT_TIMESTAMP()
+        {% if failed_models | length > 0 %}when t.RECORD_TYPE = 'MODEL' and t.MODEL_NAME in ({% for m in failed_models %}'{{ m.name }}'{% if not loop.last %},{% endif %}{% endfor %}) then CURRENT_TIMESTAMP(){% endif %}
+        else t.EXECUTION_END_TMSTP
     end,
     UPDATE_TMSTP = CURRENT_TIMESTAMP(),
-    SOURCE_DATA_CNT = case
-        when RECORD_TYPE = 'JOB' then {{ ns.total_count }}
-        else SOURCE_DATA_CNT
-    end,
-    DESTINATION_DATA_CNT_OBJ = case
-        when RECORD_TYPE = 'JOB' then object_construct('successful_models', {{ ns.success_count }}, 'failed_models', {{ ns.error_count }})
-        else DESTINATION_DATA_CNT_OBJ
+    PROCESSING_TIME_SEC = case
+        when t.RECORD_TYPE = 'JOB' then datediff('second', t.EXECUTION_START_TMSTP, CURRENT_TIMESTAMP())
+        {% if failed_models | length > 0 %}when t.RECORD_TYPE = 'MODEL' and t.MODEL_NAME in ({% for m in failed_models %}'{{ m.name }}'{% if not loop.last %},{% endif %}{% endfor %}) then datediff('second', t.EXECUTION_START_TMSTP, CURRENT_TIMESTAMP()){% endif %}
+        else t.PROCESSING_TIME_SEC
     end,
     ERROR_MESSAGE_OBJ = case
-        when RECORD_TYPE = 'JOB' then {% if ns.error_count > 0 %}object_construct('error_count', {{ ns.error_count }}, 'status', '{{ job_status }}'){% else %}null{% endif %}
+        when t.RECORD_TYPE = 'JOB' then {% if ns.error_count > 0 %}object_construct('error_count', {{ ns.error_count }}, 'status', '{{ job_status }}'){% else %}null{% endif %}
         {% for m in failed_models %}
-        when RECORD_TYPE = 'MODEL' and MODEL_NAME = '{{ m.name }}' then object_construct('error_type', 'MODEL_EXECUTION_FAILED', 'error_message', '{{ m.error }}', 'status', 'FAILED')
+        when t.RECORD_TYPE = 'MODEL' and t.MODEL_NAME = '{{ m.name }}' then object_construct('error_type', 'MODEL_EXECUTION_FAILED', 'error_message', '{{ m.error }}', 'status', 'FAILED')
         {% endfor %}
-        else ERROR_MESSAGE_OBJ
+        else t.ERROR_MESSAGE_OBJ
     end,
     STEP_EXECUTION_OBJ = case
-        when RECORD_TYPE = 'JOB' then object_construct('current_step', 'JOB_COMPLETED', 'job_status', '{{ job_status }}', 'total_models', {{ ns.total_count }}, 'successful_models', {{ ns.success_count }}, 'failed_models', {{ ns.error_count }})
+        when t.RECORD_TYPE = 'JOB' then object_construct('current_step', 'JOB_COMPLETED', 'job_status', '{{ job_status }}', 'total_models', {{ ns.total_count }}, 'successful_models', {{ ns.success_count }}, 'failed_models', {{ ns.error_count }}, 'skipped_models', {{ ns.skip_count }})
         {% for m in failed_models %}
-        when RECORD_TYPE = 'MODEL' and MODEL_NAME = '{{ m.name }}' then object_construct('current_step', 'MODEL_FAILED', 'status', 'FAILED')
+        when t.RECORD_TYPE = 'MODEL' and t.MODEL_NAME = '{{ m.name }}' then 
+            object_construct(
+                'model_name', t.MODEL_NAME,
+                'current_step', 'MODEL_FAILED',
+                'status', 'FAILED',
+                'execution_timeline', array_append(
+                    case
+                        when array_size(iff(is_array(t.STEP_EXECUTION_OBJ:execution_timeline), t.STEP_EXECUTION_OBJ:execution_timeline, array_construct())) = 0
+                        then array_construct(
+                            object_construct(
+                                'step_number', 1,
+                                'timestamp', to_varchar(t.EXECUTION_START_TMSTP, 'YYYY-MM-DD HH24:MI:SS.FF3'),
+                                'level', 'Info',
+                                'step_type', 'MODEL_START',
+                                'title', 'Model Started: ' || t.MODEL_NAME,
+                                'query_id', t.STEP_EXECUTION_OBJ:query_id_start::varchar,
+                                'content', object_construct('model', t.MODEL_NAME)
+                            )
+                        )
+                        else iff(is_array(t.STEP_EXECUTION_OBJ:execution_timeline), t.STEP_EXECUTION_OBJ:execution_timeline, array_construct())
+                    end,
+                    object_construct(
+                        'step_number', array_size(
+                            case
+                                when array_size(iff(is_array(t.STEP_EXECUTION_OBJ:execution_timeline), t.STEP_EXECUTION_OBJ:execution_timeline, array_construct())) = 0
+                                then array_construct(
+                                    object_construct(
+                                        'step_number', 1,
+                                        'timestamp', to_varchar(t.EXECUTION_START_TMSTP, 'YYYY-MM-DD HH24:MI:SS.FF3'),
+                                        'level', 'Info',
+                                        'step_type', 'MODEL_START',
+                                        'title', 'Model Started: ' || t.MODEL_NAME,
+                                        'query_id', t.STEP_EXECUTION_OBJ:query_id_start::varchar,
+                                        'content', object_construct('model', t.MODEL_NAME)
+                                    )
+                                )
+                                else iff(is_array(t.STEP_EXECUTION_OBJ:execution_timeline), t.STEP_EXECUTION_OBJ:execution_timeline, array_construct())
+                            end
+                        ) + 1,
+                        'timestamp', to_varchar(current_timestamp(), 'YYYY-MM-DD HH24:MI:SS.FF3'),
+                        'level', 'Error',
+                        'step_type', 'MODEL_FAILED',
+                        'title', 'Model Failed: ' || t.MODEL_NAME,
+                        'error_message', '{{ m.error }}',
+                        'content', object_construct(
+                            'model', t.MODEL_NAME,
+                            'status', 'FAILED',
+                            'error', '{{ m.error }}'
+                        )
+                    )
+                )
+            )
         {% endfor %}
-        else STEP_EXECUTION_OBJ
+        else t.STEP_EXECUTION_OBJ
     end
-where PROCESS_STEP_ID = '{{ process_step_id }}'
-  and (RECORD_TYPE = 'JOB' {% if failed_models | length > 0 %}or (RECORD_TYPE = 'MODEL' and MODEL_NAME in ({% for m in failed_models %}'{{ m.name }}'{% if not loop.last %},{% endif %}{% endfor %})){% endif %})
+where t.PROCESS_STEP_ID = '{{ process_step_id }}'
+  and (t.RECORD_TYPE = 'JOB' {% if failed_models | length > 0 %}or (t.RECORD_TYPE = 'MODEL' and t.MODEL_NAME in ({% for m in failed_models %}'{{ m.name }}'{% if not loop.last %},{% endif %}{% endfor %})){% endif %})
 
 {%- endmacro -%}
