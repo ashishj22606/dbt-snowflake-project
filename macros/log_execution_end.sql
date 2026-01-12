@@ -91,15 +91,19 @@ update {{ log_table }} t
             )
         )
 from (
-        with result_scan_metrics as (
-            -- Direct access to MERGE result columns; will be NULL for non-DML queries
-            select
-                "number of rows inserted"::number as rows_inserted,
-                "number of rows updated"::number as rows_updated,
-                "number of rows deleted"::number as rows_deleted
+        with result_scan_data as (
+            -- Get all data from RESULT_SCAN - will have different structure for DML vs SELECT
+            select *
             from table(result_scan(LAST_QUERY_ID()))
-            where 1=1
-            qualify row_number() over (order by 1) = 1
+            limit 1
+        ),
+        result_scan_metrics as (
+            -- Parse DML summary using GET_IGNORE_CASE on column object
+            select
+                try_to_number(to_varchar(get_ignore_case(object_construct(*), 'number of rows inserted'))) as rows_inserted,
+                try_to_number(to_varchar(get_ignore_case(object_construct(*), 'number of rows updated'))) as rows_updated,
+                try_to_number(to_varchar(get_ignore_case(object_construct(*), 'number of rows deleted'))) as rows_deleted
+            from result_scan_data
         ) ,
         query_history_metrics as (
             -- Real-time metadata for rows_produced / inserted / written_to_result
