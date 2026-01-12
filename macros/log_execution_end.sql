@@ -91,14 +91,18 @@ update {{ log_table }} t
             )
         )
 from (
-        with result_scan_metrics as (
-            -- RESULT_SCAN returns DML summary counts when available (MERGE/INSERT/UPDATE/DELETE)
-            select
-                try_cast("number of rows inserted" as number) as rows_inserted,
-                try_cast("number of rows updated" as number) as rows_updated,
-                try_cast("number of rows deleted" as number) as rows_deleted
-            from table(result_scan(LAST_QUERY_ID()))
+        with result_scan_raw as (
+            -- Capture RESULT_SCAN output; may be empty or have different columns for SELECT vs DML
+            select * from table(result_scan(LAST_QUERY_ID()))
             limit 1
+        ),
+        result_scan_metrics as (
+            -- Extract DML summary columns if they exist using object_construct
+            select
+                try_cast(get(object_construct(*), 'number of rows inserted') as number) as rows_inserted,
+                try_cast(get(object_construct(*), 'number of rows updated') as number) as rows_updated,
+                try_cast(get(object_construct(*), 'number of rows deleted') as number) as rows_deleted
+            from result_scan_raw
         ),
         query_history_metrics as (
             -- Real-time metadata for rows_produced / inserted / written_to_result
