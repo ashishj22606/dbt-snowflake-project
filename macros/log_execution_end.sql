@@ -94,9 +94,9 @@ from (
         with result_scan_metrics as (
             -- RESULT_SCAN returns DML summary counts when available (MERGE/INSERT/UPDATE/DELETE)
             select
-                $1 as rows_inserted,
-                $2 as rows_updated,
-                $3 as rows_deleted
+                try_cast("number of rows inserted" as number) as rows_inserted,
+                try_cast("number of rows updated" as number) as rows_updated,
+                try_cast("number of rows deleted" as number) as rows_deleted
             from table(result_scan(LAST_QUERY_ID()))
             limit 1
         ),
