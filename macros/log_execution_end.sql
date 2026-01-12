@@ -102,6 +102,13 @@ from (
                 (object_construct(*) : "number of rows written to result")::number as rows_written_to_result,
                 1 as src_priority
             from table(result_scan(LAST_QUERY_ID())) rs
+            -- Keep only if RESULT_SCAN returned DML summary columns; SELECT result sets will yield NULLs here
+            where coalesce((object_construct(*) : "number of rows produced")::number,
+                           (object_construct(*) : "number of rows inserted")::number,
+                           (object_construct(*) : "number of rows updated")::number,
+                           (object_construct(*) : "number of rows deleted")::number,
+                           (object_construct(*) : "number of rows written to result")::number,
+                           null) is not null
             qualify row_number() over (order by 1) = 1
         ),
         query_history_metrics as (
