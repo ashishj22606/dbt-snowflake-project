@@ -95,19 +95,22 @@ from (
             -- Use RESULT_SCAN to capture DML summary counts emitted by the last statement (e.g., MERGE/INSERT/UPDATE/DELETE)
             select
                 null as query_id,
-                (object_construct(*) : "number of rows produced")::number         as rows_produced,
-                (object_construct(*) : "number of rows inserted")::number         as rows_inserted,
-                (object_construct(*) : "number of rows updated")::number          as rows_updated,
-                (object_construct(*) : "number of rows deleted")::number          as rows_deleted,
-                (object_construct(*) : "number of rows written to result")::number as rows_written_to_result,
+                (o : "number of rows produced")::number          as rows_produced,
+                (o : "number of rows inserted")::number          as rows_inserted,
+                (o : "number of rows updated")::number           as rows_updated,
+                (o : "number of rows deleted")::number           as rows_deleted,
+                (o : "number of rows written to result")::number as rows_written_to_result,
                 1 as src_priority
-            from table(result_scan(LAST_QUERY_ID())) rs
+            from (
+                select object_construct(*) as o
+                from table(result_scan(LAST_QUERY_ID()))
+            ) rs
             -- Keep only if RESULT_SCAN returned DML summary columns; SELECT result sets will yield NULLs here
-            where coalesce((object_construct(*) : "number of rows produced")::number,
-                           (object_construct(*) : "number of rows inserted")::number,
-                           (object_construct(*) : "number of rows updated")::number,
-                           (object_construct(*) : "number of rows deleted")::number,
-                           (object_construct(*) : "number of rows written to result")::number,
+            where coalesce((o : "number of rows produced")::number,
+                           (o : "number of rows inserted")::number,
+                           (o : "number of rows updated")::number,
+                           (o : "number of rows deleted")::number,
+                           (o : "number of rows written to result")::number,
                            null) is not null
             qualify row_number() over (order by 1) = 1
         ),
