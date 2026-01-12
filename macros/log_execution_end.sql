@@ -92,51 +92,44 @@ update {{ log_table }} t
         )
 from (
         with result_scan_metrics as (
-            -- Use RESULT_SCAN to capture DML summary counts emitted by the last statement (e.g., MERGE/INSERT/UPDATE/DELETE)
+            -- RESULT_SCAN returns DML summary counts when available (MERGE/INSERT/UPDATE/DELETE)
             select
-                null as query_id,
                 (o : "number of rows produced")::number          as rows_produced,
                 (o : "number of rows inserted")::number          as rows_inserted,
                 (o : "number of rows updated")::number           as rows_updated,
                 (o : "number of rows deleted")::number           as rows_deleted,
-                (o : "number of rows written to result")::number as rows_written_to_result,
-                1 as src_priority
+                (o : "number of rows written to result")::number as rows_written_to_result
             from (
                 select object_construct(*) as o
                 from table(result_scan(LAST_QUERY_ID()))
             ) rs
-            -- Keep only if RESULT_SCAN returned DML summary columns; SELECT result sets will yield NULLs here
             where coalesce((o : "number of rows produced")::number,
                            (o : "number of rows inserted")::number,
                            (o : "number of rows updated")::number,
                            (o : "number of rows deleted")::number,
                            (o : "number of rows written to result")::number,
                            null) is not null
-            qualify row_number() over (order by 1) = 1
+            limit 1
         ),
         query_history_metrics as (
-            -- Real-time metadata; includes rows_written_to_result for SELECTs
+            -- Real-time metadata for rows_produced / inserted / written_to_result
             select
-                   query_id,
                    rows_produced,
                    rows_inserted,
-                   0 as rows_updated,
-                   0 as rows_deleted,
-                   0 as rows_written_to_result,
-                   2 as src_priority
+                   rows_updated,
+                   rows_deleted,
+                   rows_written_to_result
             from table(information_schema.query_history_by_session())
             where query_id = LAST_QUERY_ID()
             limit 1
         ),
         query_metrics as (
-            select *
-            from (
-                select * from result_scan_metrics
-                union all
-                select * from query_history_metrics
-            ) s
-            order by src_priority
-            limit 1
+            select
+                coalesce((select rows_produced          from result_scan_metrics), (select rows_produced          from query_history_metrics), 0) as rows_produced,
+                coalesce((select rows_inserted          from result_scan_metrics), (select rows_inserted          from query_history_metrics), 0) as rows_inserted,
+                coalesce((select rows_updated           from result_scan_metrics), (select rows_updated           from query_history_metrics), 0) as rows_updated,
+                coalesce((select rows_deleted           from result_scan_metrics), (select rows_deleted           from query_history_metrics), 0) as rows_deleted,
+                coalesce((select rows_written_to_result from result_scan_metrics), (select rows_written_to_result from query_history_metrics), 0) as rows_written_to_result
         )
     select 
         l.PROCESS_STEP_ID,
