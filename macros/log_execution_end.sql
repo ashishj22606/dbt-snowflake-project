@@ -110,9 +110,9 @@ from (
                    query_id,
                    rows_produced,
                    rows_inserted,
-                   coalesce(rows_updated, 0) as rows_updated,
-                   coalesce(rows_deleted, 0) as rows_deleted,
-                   coalesce(rows_written_to_result, 0) as rows_written_to_result,
+                   0 as rows_updated,
+                   0 as rows_deleted,
+                   0 as rows_written_to_result,
                    2 as src_priority
             from table(information_schema.query_history_by_session())
             where query_id = LAST_QUERY_ID()
