@@ -94,21 +94,10 @@ from (
         with result_scan_metrics as (
             -- RESULT_SCAN returns DML summary counts when available (MERGE/INSERT/UPDATE/DELETE)
             select
-                (o : "number of rows produced")::number          as rows_produced,
-                (o : "number of rows inserted")::number          as rows_inserted,
-                (o : "number of rows updated")::number           as rows_updated,
-                (o : "number of rows deleted")::number           as rows_deleted,
-                (o : "number of rows written to result")::number as rows_written_to_result
-            from (
-                select object_construct(*) as o
-                from table(result_scan(LAST_QUERY_ID()))
-            ) rs
-            where coalesce((o : "number of rows produced")::number,
-                           (o : "number of rows inserted")::number,
-                           (o : "number of rows updated")::number,
-                           (o : "number of rows deleted")::number,
-                           (o : "number of rows written to result")::number,
-                           null) is not null
+                $1 as rows_inserted,
+                $2 as rows_updated,
+                $3 as rows_deleted
+            from table(result_scan(LAST_QUERY_ID()))
             limit 1
         ),
         query_history_metrics as (
@@ -125,11 +114,11 @@ from (
         ),
         query_metrics as (
             select
-                coalesce((select rows_produced          from result_scan_metrics), (select rows_produced          from query_history_metrics), 0) as rows_produced,
-                coalesce((select rows_inserted          from result_scan_metrics), (select rows_inserted          from query_history_metrics), 0) as rows_inserted,
-                coalesce((select rows_updated           from result_scan_metrics), (select rows_updated           from query_history_metrics), 0) as rows_updated,
-                coalesce((select rows_deleted           from result_scan_metrics), (select rows_deleted           from query_history_metrics), 0) as rows_deleted,
-                coalesce((select rows_written_to_result from result_scan_metrics), (select rows_written_to_result from query_history_metrics), 0) as rows_written_to_result
+                coalesce((select rows_produced          from query_history_metrics), 0) as rows_produced,
+                coalesce((select rows_inserted          from result_scan_metrics), (select rows_inserted from query_history_metrics), 0) as rows_inserted,
+                coalesce((select rows_updated           from result_scan_metrics), 0) as rows_updated,
+                coalesce((select rows_deleted           from result_scan_metrics), 0) as rows_deleted,
+                coalesce((select rows_written_to_result from query_history_metrics), 0) as rows_written_to_result
         )
     select 
         l.PROCESS_STEP_ID,
