@@ -99,9 +99,9 @@ from (
         result_scan_metrics as (
             -- Extract DML summary columns if they exist using object_construct
             select
-                try_to_number(get(object_construct(*), 'number of rows inserted')) as rows_inserted,
-                try_to_number(get(object_construct(*), 'number of rows updated')) as rows_updated,
-                try_to_number(get(object_construct(*), 'number of rows deleted')) as rows_deleted
+                to_number(get(object_construct(*), 'number of rows inserted')::string, 38, 0) as rows_inserted,
+                to_number(get(object_construct(*), 'number of rows updated')::string, 38, 0) as rows_updated,
+                to_number(get(object_construct(*), 'number of rows deleted')::string, 38, 0) as rows_deleted
             from result_scan_raw
         ),
         query_history_metrics as (
