@@ -91,19 +91,16 @@ update {{ log_table }} t
             )
         )
 from (
-        with result_scan_raw as (
-            -- Capture RESULT_SCAN output; may be empty or have different columns for SELECT vs DML
-            select * from table(result_scan(LAST_QUERY_ID()))
-            limit 1
-        ),
-        result_scan_metrics as (
-            -- Extract DML summary columns if they exist using object_construct
+        with result_scan_metrics as (
+            -- Direct access to MERGE result columns; will be NULL for non-DML queries
             select
-                to_number(get(object_construct(*), 'number of rows inserted')::string, 38, 0) as rows_inserted,
-                to_number(get(object_construct(*), 'number of rows updated')::string, 38, 0) as rows_updated,
-                to_number(get(object_construct(*), 'number of rows deleted')::string, 38, 0) as rows_deleted
-            from result_scan_raw
-        ),
+                "number of rows inserted"::number as rows_inserted,
+                "number of rows updated"::number as rows_updated,
+                "number of rows deleted"::number as rows_deleted
+            from table(result_scan(LAST_QUERY_ID()))
+            where 1=1
+            qualify row_number() over (order by 1) = 1
+        ) ,
         query_history_metrics as (
             -- Real-time metadata for rows_produced / inserted / written_to_result
             select
@@ -118,10 +115,10 @@ from (
         ),
         query_metrics as (
             select
-                coalesce((select rows_produced          from query_history_metrics), 0) as rows_produced,
-                coalesce((select rows_inserted          from result_scan_metrics), (select rows_inserted from query_history_metrics), 0) as rows_inserted,
-                coalesce((select rows_updated           from result_scan_metrics), 0) as rows_updated,
-                coalesce((select rows_deleted           from result_scan_metrics), 0) as rows_deleted,
+                coalesce((select rows_produced from query_history_metrics), 0) as rows_produced,
+                coalesce((select rows_inserted from result_scan_metrics), (select rows_inserted from query_history_metrics), 0) as rows_inserted,
+                coalesce((select rows_updated from result_scan_metrics), 0) as rows_updated,
+                coalesce((select rows_deleted from result_scan_metrics), 0) as rows_deleted,
                 coalesce((select rows_written_to_result from query_history_metrics), 0) as rows_written_to_result
         )
     select 
