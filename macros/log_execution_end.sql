@@ -91,39 +91,43 @@ update {{ log_table }} t
             )
         )
 from (
-    with query_metrics as (
-        select query_id, 
-               rows_produced, 
-               rows_inserted, 
-               rows_updated, 
-               rows_deleted, 
-               rows_written_to_result
-        from (
-            select query_id, 
-                   rows_produced, 
-                   rows_inserted, 
-                   0 as rows_updated,
-                   0 as rows_deleted,
-                   0 as rows_written_to_result,
-                   start_time, 
-                   1 as src_priority
+        with result_scan_metrics as (
+            -- Use RESULT_SCAN to capture DML summary counts emitted by the last statement (e.g., MERGE/INSERT/UPDATE/DELETE)
+            select
+                null as query_id,
+                (object_construct(*) : "number of rows produced")::number         as rows_produced,
+                (object_construct(*) : "number of rows inserted")::number         as rows_inserted,
+                (object_construct(*) : "number of rows updated")::number          as rows_updated,
+                (object_construct(*) : "number of rows deleted")::number          as rows_deleted,
+                (object_construct(*) : "number of rows written to result")::number as rows_written_to_result,
+                1 as src_priority
+            from table(result_scan(LAST_QUERY_ID())) rs
+            qualify row_number() over (order by 1) = 1
+        ),
+        query_history_metrics as (
+            -- Real-time metadata; includes rows_written_to_result for SELECTs
+            select
+                   query_id,
+                   rows_produced,
+                   rows_inserted,
+                   coalesce(rows_updated, 0) as rows_updated,
+                   coalesce(rows_deleted, 0) as rows_deleted,
+                   coalesce(rows_written_to_result, 0) as rows_written_to_result,
+                   2 as src_priority
             from table(information_schema.query_history_by_session())
             where query_id = LAST_QUERY_ID()
-            union all
-            select query_id, 
-                   rows_produced, 
-                   rows_inserted, 
-                   rows_updated, 
-                   rows_deleted, 
-                   rows_written_to_result, 
-                   start_time, 
-                   2 as src_priority
-            from snowflake.account_usage.query_history
-            where query_id = LAST_QUERY_ID()
-        ) s
-        order by src_priority, start_time desc
-        limit 1
-    )
+            limit 1
+        ),
+        query_metrics as (
+            select *
+            from (
+                select * from result_scan_metrics
+                union all
+                select * from query_history_metrics
+            ) s
+            order by src_priority
+            limit 1
+        )
     select 
         l.PROCESS_STEP_ID,
         l.RECORD_TYPE,
