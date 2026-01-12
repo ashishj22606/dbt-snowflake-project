@@ -116,9 +116,9 @@ from (
             select
                    rows_produced,
                    rows_inserted,
-                   rows_updated,
-                   rows_deleted,
-                   rows_written_to_result
+                   0 as rows_updated,
+                   0 as rows_deleted,
+                   0 as rows_written_to_result
             from table(information_schema.query_history_by_session())
             where query_id = LAST_QUERY_ID()
             limit 1
